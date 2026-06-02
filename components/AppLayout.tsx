@@ -8,10 +8,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   // A simple list of our navigation routes
   const navLinks = [
-    { name: "Dashboard", href: "/" },
+    { name: "Dashboard & Reports", href: "/" },
     { name: "Customers", href: "/customers" },
     { name: "Products", href: "/products" },
-    { name: "Quotations", href: "/quotations" },
+    { name: "Billings", href: "/quotations" },
   ];
 
   return (

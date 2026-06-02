@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { useParams, useRouter } from "next/navigation";
 
-// Helper function to convert INR numbers to words (Indian Numbering System)
+// Helper function to convert INR numbers to words
 const numberToWords = (num: number | string) => {
   if (!num || isNaN(Number(num))) return "Zero Rupees Only";
   const [rupees, paise] = Number(num).toFixed(2).split('.');
@@ -40,8 +40,8 @@ export default function QuotationPrintView() {
   const [states, setStates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // NOTE: Replace this with your actual Home State UUID from state_master
-  const COMPANY_STATE_ID = "REPLACE_WITH_COMPANY_STATE_UUID"; 
+  // FIXED: Brought back your actual Company State ID
+  const COMPANY_STATE_ID = "bb6a33c1-9649-4f1e-a51b-5eb7f6b0fc8f"; 
 
   useEffect(() => {
     if (params.id) {
@@ -81,8 +81,16 @@ export default function QuotationPrintView() {
   const customer = quotation.customers;
   const isLocal = Number(quotation.cgst) > 0 || Number(quotation.sgst) > 0;
 
+  // FIXED: Now checks for state_code as well as code, preventing blank spaces
   const getStateDetails = (stateId: string) => {
-    return states.find(s => s.id === stateId) || { state_name: 'N/A', code: 'N/A' };
+    const foundState = states.find(s => s.id === stateId);
+    if (foundState) {
+      return { 
+        state_name: foundState.state_name, 
+        code: foundState.state_code || foundState.code || 'N/A' 
+      };
+    }
+    return { state_name: 'N/A', code: 'N/A' };
   };
 
   const customerState = getStateDetails(customer.state);
@@ -93,12 +101,37 @@ export default function QuotationPrintView() {
     ? consigneeState.state_name 
     : customerState.state_name;
 
+  // --- MATH FOR DETAILED BREAKDOWN TABLE ---
+  const itemsTaxable = Number(quotation.subtotal) || 0;
+  let itemsCgst = 0, itemsSgst = 0, itemsIgst = 0;
+  lineItems.forEach(item => {
+    itemsCgst += Number(item.cgst_amount) || 0;
+    itemsSgst += Number(item.sgst_amount) || 0;
+    itemsIgst += Number(item.igst_amount) || 0;
+  });
+
+  const packaging = Number(quotation.packaging_charges) || 0;
+  const packagingTax = packaging * ((Number(quotation.packaging_gst) || 0) / 100);
+  const packagingCgst = isLocal ? packagingTax / 2 : 0;
+  const packagingSgst = isLocal ? packagingTax / 2 : 0;
+  const packagingIgst = !isLocal ? packagingTax : 0;
+
+  const freight = Number(quotation.carrier_charges) || 0;
+  const freightTax = freight * ((Number(quotation.carrier_gst) || 0) / 100);
+  const freightCgst = isLocal ? freightTax / 2 : 0;
+  const freightSgst = isLocal ? freightTax / 2 : 0;
+  const freightIgst = !isLocal ? freightTax : 0;
+
+  const other = Number(quotation.other_charges) || 0;
+  const otherTax = other * ((Number(quotation.other_gst) || 0) / 100);
+  const otherCgst = isLocal ? otherTax / 2 : 0;
+  const otherSgst = isLocal ? otherTax / 2 : 0;
+  const otherIgst = !isLocal ? otherTax : 0;
+
+  const totalTaxableValue = itemsTaxable + packaging + freight + other;
+
   return (
     <>
-      {/* NEW: Strict Print Isolation CSS 
-        This forces the browser to hide the sidebar, header, and body, 
-        and pins only the invoice to the absolute top-left of the printed page.
-      */}
       <style dangerouslySetInnerHTML={{
         __html: `
           @media print {
@@ -123,7 +156,6 @@ export default function QuotationPrintView() {
         `
       }} />
 
-      {/* Main Wrapper with ID for Print Targeting */}
       <div id="printable-invoice" className="bg-slate-100 min-h-screen p-4 md:p-8 print:p-0 print:bg-white text-black">
         
         {/* ACTION BAR */}
@@ -142,15 +174,11 @@ export default function QuotationPrintView() {
         {/* THE A4 INVOICE DOCUMENT */}
         <div className="max-w-5xl mx-auto bg-white print:max-w-full text-xs md:text-sm">
           
-          {/* TEXT OUTSIDE THE BORDER */}
           <div className="text-center mb-1">
             <h1 className="text-xl font-bold uppercase tracking-wider text-black">TAX Invoice</h1>
             <p className="text-xs text-black font-medium">See Section 31 CGST Act & Rule 1 of Invoice Rule</p>
           </div>
 
-          {/* ========================================== */}
-          {/* START OF BLACK BORDER ENCLOSURE */}
-          {/* ========================================== */}
           <div className="border-[2px] border-black text-xs md:text-sm">
             
             {/* COMPANY HEADER ROW */}
@@ -168,7 +196,7 @@ export default function QuotationPrintView() {
                   <span className="font-bold">GSTIN/UIN</span><span className="uppercase">: 07AAACA1234A1Z5</span>
                   <span className="font-bold">PAN</span><span className="uppercase">: AAACA1234A</span>
                   <span className="font-bold">IEC No.</span><span className="uppercase">: 0123456789</span>
-                  <span className="font-bold">State Code</span><span className="uppercase">: {companyState.code || '07'}</span>
+                  <span className="font-bold">State Code</span><span className="uppercase">: {companyState.code}</span>
                 </div>
               </div>
             </div>
@@ -179,9 +207,10 @@ export default function QuotationPrintView() {
                 <p className="text-[10px] md:text-xs font-bold mb-1">Invoice / Bill No.</p>
                 <p className="font-semibold">{quotation.bill_no}</p>
               </div>
+              {/* FIXED: Explicitly pulls Date of Supply */}
               <div className="p-2">
                 <p className="text-[10px] md:text-xs font-bold mb-1">Date of Supply</p>
-                <p className="font-semibold">{new Date(quotation.quotation_date).toLocaleDateString('en-IN')}</p>
+                <p className="font-semibold">{quotation.date_of_supply ? new Date(quotation.date_of_supply).toLocaleDateString('en-IN') : 'N/A'}</p>
               </div>
               <div className="p-2">
                 <p className="text-[10px] md:text-xs font-bold mb-1">Place of Supply</p>
@@ -193,7 +222,7 @@ export default function QuotationPrintView() {
               </div>
             </div>
 
-            {/* PARTIES ROW (Billed To / Shipped To) */}
+            {/* PARTIES ROW */}
             <div className="flex border-b-[2px] border-black">
               <div className="w-1/2 p-2 border-r-[2px] border-black">
                 <p className="text-xs font-bold italic mb-1 underline">Details of Receiver (Billed to)</p>
@@ -299,57 +328,112 @@ export default function QuotationPrintView() {
                 </div>
               </div>
 
-              {/* Right side: Math Breakdown */}
+              {/* Right side: Detailed Math Breakdown */}
               <div className="w-1/2">
-                <table className="w-full text-xs md:text-sm">
-                  <tbody className="divide-y-[2px] divide-black">
+                <table className="w-full text-[10px] md:text-xs">
+                  
+                  {/* Detailed Breakdown Group */}
+                  <tbody className="divide-y-[1px] divide-black/20 border-b-[2px] border-black">
+                    
+                    {/* Items Group */}
+                    <tr>
+                      <td className="py-1 px-2 font-bold">Items Value</td>
+                      <td className="py-1 px-2 text-right font-bold w-24 md:w-32 border-l-[2px] border-black">₹{itemsTaxable.toFixed(2)}</td>
+                    </tr>
+                    {itemsTaxable > 0 && (
+                      isLocal ? (
+                        <>
+                          <tr><td className="py-[2px] px-2 text-slate-600 italic pl-4">CGST on Items</td><td className="py-[2px] px-2 text-right border-l-[2px] border-black">₹{itemsCgst.toFixed(2)}</td></tr>
+                          <tr><td className="py-[2px] px-2 text-slate-600 italic pl-4">SGST on Items</td><td className="py-[2px] px-2 text-right border-l-[2px] border-black">₹{itemsSgst.toFixed(2)}</td></tr>
+                        </>
+                      ) : (
+                        <tr><td className="py-[2px] px-2 text-slate-600 italic pl-4">IGST on Items</td><td className="py-[2px] px-2 text-right border-l-[2px] border-black">₹{itemsIgst.toFixed(2)}</td></tr>
+                      )
+                    )}
+
+                    {/* Packaging Group */}
+                    {packaging > 0 && (
+                      <>
+                        <tr className="border-t-[1px] border-black/20">
+                          <td className="py-1 px-2 font-bold">Packaging Cost</td>
+                          <td className="py-1 px-2 text-right font-bold border-l-[2px] border-black">₹{packaging.toFixed(2)}</td>
+                        </tr>
+                        {isLocal ? (
+                          <>
+                            <tr><td className="py-[2px] px-2 text-slate-600 italic pl-4">CGST on Pkg</td><td className="py-[2px] px-2 text-right border-l-[2px] border-black">₹{packagingCgst.toFixed(2)}</td></tr>
+                            <tr><td className="py-[2px] px-2 text-slate-600 italic pl-4">SGST on Pkg</td><td className="py-[2px] px-2 text-right border-l-[2px] border-black">₹{packagingSgst.toFixed(2)}</td></tr>
+                          </>
+                        ) : (
+                          <tr><td className="py-[2px] px-2 text-slate-600 italic pl-4">IGST on Pkg</td><td className="py-[2px] px-2 text-right border-l-[2px] border-black">₹{packagingIgst.toFixed(2)}</td></tr>
+                        )}
+                      </>
+                    )}
+
+                    {/* Freight Group */}
+                    {freight > 0 && (
+                      <>
+                        <tr className="border-t-[1px] border-black/20">
+                          <td className="py-1 px-2 font-bold">Freight Charges</td>
+                          <td className="py-1 px-2 text-right font-bold border-l-[2px] border-black">₹{freight.toFixed(2)}</td>
+                        </tr>
+                        {isLocal ? (
+                          <>
+                            <tr><td className="py-[2px] px-2 text-slate-600 italic pl-4">CGST on Freight</td><td className="py-[2px] px-2 text-right border-l-[2px] border-black">₹{freightCgst.toFixed(2)}</td></tr>
+                            <tr><td className="py-[2px] px-2 text-slate-600 italic pl-4">SGST on Freight</td><td className="py-[2px] px-2 text-right border-l-[2px] border-black">₹{freightSgst.toFixed(2)}</td></tr>
+                          </>
+                        ) : (
+                          <tr><td className="py-[2px] px-2 text-slate-600 italic pl-4">IGST on Freight</td><td className="py-[2px] px-2 text-right border-l-[2px] border-black">₹{freightIgst.toFixed(2)}</td></tr>
+                        )}
+                      </>
+                    )}
+
+                    {/* Other Costs Group */}
+                    {other > 0 && (
+                      <>
+                        <tr className="border-t-[1px] border-black/20">
+                          <td className="py-1 px-2 font-bold">Other Costs</td>
+                          <td className="py-1 px-2 text-right font-bold border-l-[2px] border-black">₹{other.toFixed(2)}</td>
+                        </tr>
+                        {isLocal ? (
+                          <>
+                            <tr><td className="py-[2px] px-2 text-slate-600 italic pl-4">CGST on Other</td><td className="py-[2px] px-2 text-right border-l-[2px] border-black">₹{otherCgst.toFixed(2)}</td></tr>
+                            <tr><td className="py-[2px] px-2 text-slate-600 italic pl-4">SGST on Other</td><td className="py-[2px] px-2 text-right border-l-[2px] border-black">₹{otherSgst.toFixed(2)}</td></tr>
+                          </>
+                        ) : (
+                          <tr><td className="py-[2px] px-2 text-slate-600 italic pl-4">IGST on Other</td><td className="py-[2px] px-2 text-right border-l-[2px] border-black">₹{otherIgst.toFixed(2)}</td></tr>
+                        )}
+                      </>
+                    )}
+                  </tbody>
+
+                  {/* Summary Footer Group */}
+                  <tbody className="divide-y-[2px] divide-black text-xs md:text-sm">
                     <tr>
                       <td className="py-1 px-2 font-bold">Total Taxable Value</td>
-                      <td className="py-1 px-2 text-right font-bold w-32 border-l-[2px] border-black">₹{Number(quotation.subtotal).toFixed(2)}</td>
+                      <td className="py-1 px-2 text-right font-bold w-24 md:w-32 border-l-[2px] border-black">₹{totalTaxableValue.toFixed(2)}</td>
                     </tr>
                     
                     {isLocal ? (
                       <>
                         <tr>
-                          <td className="py-1 px-2 font-bold">Add: CGST</td>
-                          <td className="py-1 px-2 text-right w-32 border-l-[2px] border-black">₹{Number(quotation.cgst).toFixed(2)}</td>
+                          <td className="py-1 px-2 font-bold text-slate-700">Total CGST</td>
+                          <td className="py-1 px-2 text-right border-l-[2px] border-black">₹{Number(quotation.cgst).toFixed(2)}</td>
                         </tr>
                         <tr>
-                          <td className="py-1 px-2 font-bold">Add: SGST</td>
-                          <td className="py-1 px-2 text-right w-32 border-l-[2px] border-black">₹{Number(quotation.sgst).toFixed(2)}</td>
+                          <td className="py-1 px-2 font-bold text-slate-700">Total SGST</td>
+                          <td className="py-1 px-2 text-right border-l-[2px] border-black">₹{Number(quotation.sgst).toFixed(2)}</td>
                         </tr>
                       </>
                     ) : (
                       <tr>
-                        <td className="py-1 px-2 font-bold">Add: IGST</td>
-                        <td className="py-1 px-2 text-right w-32 border-l-[2px] border-black">₹{Number(quotation.igst).toFixed(2)}</td>
-                      </tr>
-                    )}
-
-                    {Number(quotation.packaging_charges) > 0 && (
-                      <tr>
-                        <td className="py-1 px-2 font-bold">Add: Packaging Charges</td>
-                        <td className="py-1 px-2 text-right w-32 border-l-[2px] border-black">₹{Number(quotation.packaging_charges).toFixed(2)}</td>
-                      </tr>
-                    )}
-                    
-                    {Number(quotation.carrier_charges) > 0 && (
-                      <tr>
-                        <td className="py-1 px-2 font-bold">Add: Freight Charges</td>
-                        <td className="py-1 px-2 text-right w-32 border-l-[2px] border-black">₹{Number(quotation.carrier_charges).toFixed(2)}</td>
-                      </tr>
-                    )}
-
-                    {Number(quotation.other_charges) > 0 && (
-                      <tr>
-                        <td className="py-1 px-2 font-bold">Add: Other Costs</td>
-                        <td className="py-1 px-2 text-right w-32 border-l-[2px] border-black">₹{Number(quotation.other_charges).toFixed(2)}</td>
+                        <td className="py-1 px-2 font-bold text-slate-700">Total IGST</td>
+                        <td className="py-1 px-2 text-right border-l-[2px] border-black">₹{Number(quotation.igst).toFixed(2)}</td>
                       </tr>
                     )}
                     
                     <tr className="bg-slate-50">
                       <td className="py-2 px-2 text-sm md:text-base font-black uppercase tracking-wide">Grand Total</td>
-                      <td className="py-2 px-2 text-right text-sm md:text-base font-black w-32 border-l-[2px] border-black">₹{Number(quotation.grand_total).toFixed(2)}</td>
+                      <td className="py-2 px-2 text-right text-sm md:text-base font-black border-l-[2px] border-black">₹{Number(quotation.grand_total).toFixed(2)}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -362,10 +446,10 @@ export default function QuotationPrintView() {
               <span className="italic font-medium">{numberToWords(quotation.grand_total)}</span>
             </div>
 
-            {/* REVERSE CHARGE TEXT */}
+            {/* FIXED: Added Reverse Charge Status */}
             <div className="border-t-[2px] border-black p-3">
               <span className="font-bold">Tax is payable on reverse charge (Yes/No): </span> 
-              <span>No</span>
+              <span>{quotation.reverse_charge ? 'Yes' : 'No'}</span>
             </div>
 
             {/* CERTIFICATION */}
@@ -398,9 +482,6 @@ export default function QuotationPrintView() {
             </div>
             
           </div>
-          {/* ========================================== */}
-          {/* END OF BLACK BORDER ENCLOSURE */}
-          {/* ========================================== */}
 
         </div>
       </div>

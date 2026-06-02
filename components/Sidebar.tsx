@@ -8,8 +8,9 @@ export default function Sidebar() {
       </h1>
       
       <nav className="flex flex-col gap-2">
+        {/* Updated from "Dashboard" to "Dashboard and Report" */}
         <Link href="/" className="hover:bg-slate-800 p-3 rounded transition-colors">
-          Dashboard
+          Dashboard and Report
         </Link>
         <Link href="/products" className="hover:bg-slate-800 p-3 rounded transition-colors">
           Products Master
@@ -17,8 +18,8 @@ export default function Sidebar() {
         <Link href="/customers" className="hover:bg-slate-800 p-3 rounded transition-colors">
           Customers Master
         </Link>
-        <Link href="/invoices" className="hover:bg-slate-800 p-3 rounded transition-colors">
-          Invoices (Sales)
+        <Link href="/quotations" className="hover:bg-slate-800 p-3 rounded transition-colors">
+          Billing
         </Link>
       </nav>
     </div>

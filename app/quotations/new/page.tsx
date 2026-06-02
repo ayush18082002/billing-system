@@ -5,7 +5,7 @@ import { supabase } from "../../lib/supabase";
 import Select from "react-select";
 import { useRouter } from "next/navigation"; 
 
-export default function CreateQuotation() {
+export default function CreateBill() {
   const router = useRouter(); 
 
   const [customers, setCustomers] = useState<any[]>([]);
@@ -29,6 +29,8 @@ export default function CreateQuotation() {
     vehicleNumber: "",
     grNumber: "",
     grDate: "",
+    dateOfSupply: "", // NEW
+    reverseCharge: false, // NEW
     isConsigneeDifferent: false,
     consigneeName: "",
     consigneeAddress: "",
@@ -37,13 +39,16 @@ export default function CreateQuotation() {
   });
 
   const [rows, setRows] = useState([
-    { id: 1, productId: null as string | null, utility: "", uom: "", qty: 1, rate: 0, discountPercent: 0, gstPercent: 0 }
+    { id: 1, productId: null as string | null, product_head: "", uom: "", qty: 1, rate: 0, discountPercent: 0, gstPercent: 0 }
   ]);
 
   const [charges, setCharges] = useState({
-    carrierCharges: 0,
     packagingCharges: 0,
-    otherCosts: 0
+    packagingGst: 18,
+    carrierCharges: 0,
+    carrierGst: 18,
+    otherCosts: 0,
+    otherGst: 18
   });
 
   useEffect(() => {
@@ -69,7 +74,7 @@ export default function CreateQuotation() {
   };
 
   const addRow = () => {
-    setRows([...rows, { id: Date.now(), productId: null, utility: "", uom: "", qty: 1, rate: 0, discountPercent: 0, gstPercent: 0 }]);
+    setRows([...rows, { id: Date.now(), productId: null, product_head: "", uom: "", qty: 1, rate: 0, discountPercent: 0, gstPercent: 0 }]);
   };
 
   const removeRow = (idToRemove: number) => {
@@ -85,7 +90,7 @@ export default function CreateQuotation() {
         if (field === 'productId' && value) {
           const selectedProduct = products.find(p => p.id === value);
           if (selectedProduct) {
-            updatedRow.utility = selectedProduct.utility;
+            updatedRow.product_head = selectedProduct.product_head;
             updatedRow.uom = selectedProduct.uom;
             updatedRow.gstPercent = parseFloat(selectedProduct.gst_rate) || 0;
           }
@@ -96,7 +101,6 @@ export default function CreateQuotation() {
     }));
   };
 
-  // --- DYNAMIC TAX SHIFTING LOGIC ---
   const activeStateId = dispatch.isConsigneeDifferent && dispatch.consigneeState 
     ? dispatch.consigneeState 
     : header.customerStateId;
@@ -122,25 +126,50 @@ export default function CreateQuotation() {
 
   const calculateTotals = () => {
     let subtotalTaxable = 0;
-    let totalCgst = 0;
-    let totalSgst = 0;
-    let totalIgst = 0;
+    let itemCgst = 0;
+    let itemSgst = 0;
+    let itemIgst = 0;
 
     processedRows.forEach(row => {
       subtotalTaxable += row.taxableAmount;
-      totalCgst += row.cgst;
-      totalSgst += row.sgst;
-      totalIgst += row.igst;
+      itemCgst += row.cgst;
+      itemSgst += row.sgst;
+      itemIgst += row.igst;
     });
 
     const carrier = parseFloat(charges.carrierCharges as any) || 0;
+    const carrierTax = carrier * ((parseFloat(charges.carrierGst as any) || 0) / 100);
+    const carrierCgst = isLocal ? carrierTax / 2 : 0;
+    const carrierSgst = isLocal ? carrierTax / 2 : 0;
+    const carrierIgst = !isLocal ? carrierTax : 0;
+
     const packaging = parseFloat(charges.packagingCharges as any) || 0;
+    const packagingTax = packaging * ((parseFloat(charges.packagingGst as any) || 0) / 100);
+    const packagingCgst = isLocal ? packagingTax / 2 : 0;
+    const packagingSgst = isLocal ? packagingTax / 2 : 0;
+    const packagingIgst = !isLocal ? packagingTax : 0;
+
     const other = parseFloat(charges.otherCosts as any) || 0;
-    const extraChargesTotal = carrier + packaging + other;
+    const otherTax = other * ((parseFloat(charges.otherGst as any) || 0) / 100);
+    const otherCgst = isLocal ? otherTax / 2 : 0;
+    const otherSgst = isLocal ? otherTax / 2 : 0;
+    const otherIgst = !isLocal ? otherTax : 0;
 
-    const grandTotal = subtotalTaxable + totalCgst + totalSgst + totalIgst + extraChargesTotal;
+    const totalTaxableValue = subtotalTaxable + carrier + packaging + other;
+    
+    const finalCgst = itemCgst + carrierCgst + packagingCgst + otherCgst;
+    const finalSgst = itemSgst + carrierSgst + packagingSgst + otherSgst;
+    const finalIgst = itemIgst + carrierIgst + packagingIgst + otherIgst;
 
-    return { subtotalTaxable, totalCgst, totalSgst, totalIgst, carrier, packaging, other, extraChargesTotal, grandTotal };
+    const grandTotal = totalTaxableValue + finalCgst + finalSgst + finalIgst;
+
+    return { 
+      subtotalTaxable, itemCgst, itemSgst, itemIgst, 
+      carrier, carrierCgst, carrierSgst, carrierIgst,
+      packaging, packagingCgst, packagingSgst, packagingIgst,
+      other, otherCgst, otherSgst, otherIgst,
+      totalTaxableValue, finalCgst, finalSgst, finalIgst, grandTotal 
+    };
   };
 
   const totals = calculateTotals();
@@ -160,26 +189,31 @@ export default function CreateQuotation() {
       .from('quotations')
       .insert([{
         bill_no: header.qtNo,
-        quotation_date: header.qtDate,
+        bill_date: header.qtDate, 
         customer_id: header.customerId,
         mode_of_transport: dispatch.modeOfTransport,
         po_number: dispatch.poNumber,
-        po_date: dispatch.poDate || null,
+        po_date: dispatch.poDate || null, 
         vehicle_number: dispatch.vehicleNumber,
         gr_number: dispatch.grNumber,
-        gr_date: dispatch.grDate || null,
+        gr_date: dispatch.grDate || null, 
+        date_of_supply: dispatch.dateOfSupply || null, // NEW
+        reverse_charge: dispatch.reverseCharge, // NEW
         is_consignee_different: dispatch.isConsigneeDifferent,
         consignee_name: dispatch.isConsigneeDifferent ? dispatch.consigneeName : null,
         consignee_address: dispatch.isConsigneeDifferent ? dispatch.consigneeAddress : null,
         consignee_gstin: dispatch.isConsigneeDifferent ? dispatch.consigneeGst : null,
         consignee_state: dispatch.isConsigneeDifferent ? dispatch.consigneeState : null,
         subtotal: totals.subtotalTaxable,
-        cgst: totals.totalCgst,
-        sgst: totals.totalSgst,
-        igst: totals.totalIgst,
+        cgst: totals.finalCgst,
+        sgst: totals.finalSgst,
+        igst: totals.finalIgst,
         carrier_charges: totals.carrier,
+        carrier_gst: parseFloat(charges.carrierGst as any) || 0,
         packaging_charges: totals.packaging,
+        packaging_gst: parseFloat(charges.packagingGst as any) || 0,
         other_charges: totals.other, 
+        other_gst: parseFloat(charges.otherGst as any) || 0,
         grand_total: totals.grandTotal
       }])
       .select() 
@@ -212,18 +246,16 @@ export default function CreateQuotation() {
       return;
     }
 
-    alert("Success! Quotation saved to database.");
+    alert("Success! Bill saved to database.");
     router.push(`/quotations`);
   };
 
-  // MAPPING OPTIONS
   const customerOptions = customers.map(c => ({ value: c.id, label: `${c.business_name} (${c.gstin || 'No GSTIN'})`, stateId: c.state }));
   const stateOptions = states.map(s => ({ value: s.id, label: s.state_name }));
   
-  // UPDATED: Products now search by Utility + Name
   const productOptions = products.map(p => ({ 
     value: p.id, 
-    label: p.utility ? `[${p.utility}] ${p.name}` : p.name 
+    label: p.product_head ? `[${p.product_head}] ${p.name}` : p.name 
   }));
 
   return (
@@ -232,7 +264,7 @@ export default function CreateQuotation() {
       {/* 1. HEADER SECTION */}
       <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
         <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-200">
-          <h2 className="text-2xl font-bold text-slate-800">Create Quotation</h2>
+          <h2 className="text-2xl font-bold text-slate-800">Create Bill</h2>
           <div className="text-right">
             <p className="text-sm text-slate-500 font-medium">Bill No.</p>
             <p className="text-xl font-bold text-blue-600">{header.qtNo}</p>
@@ -255,11 +287,6 @@ export default function CreateQuotation() {
                 Tax Bracket: <span className={`font-bold ${isLocal ? 'text-blue-600' : 'text-purple-600'}`}>
                   {isLocal ? "Local (CGST/SGST)" : "Interstate (IGST)"}
                 </span>
-                {dispatch.isConsigneeDifferent && dispatch.consigneeState && (
-                  <span className="text-slate-500 font-normal ml-1">
-                    (Based on Shipped-To State)
-                  </span>
-                )}
               </p>
             )}
           </div>
@@ -281,11 +308,11 @@ export default function CreateQuotation() {
         
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">PO Number</label>
+            <label className="block text-xs font-medium text-slate-700 mb-1">PO Number (Optional)</label>
             <input type="text" value={dispatch.poNumber} onChange={(e) => setDispatch({...dispatch, poNumber: e.target.value})} className="w-full border border-slate-300 rounded-md p-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g., PO-4099" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">PO Date</label>
+            <label className="block text-xs font-medium text-slate-700 mb-1">PO Date (Optional)</label>
             <input type="date" value={dispatch.poDate} onChange={(e) => setDispatch({...dispatch, poDate: e.target.value})} className="w-full border border-slate-300 rounded-md p-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
@@ -303,26 +330,48 @@ export default function CreateQuotation() {
             <input type="text" value={dispatch.vehicleNumber} onChange={(e) => setDispatch({...dispatch, vehicleNumber: e.target.value})} className="w-full border border-slate-300 rounded-md p-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g., DL 1A 1234" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">GR / RR No.</label>
+            <label className="block text-xs font-medium text-slate-700 mb-1">GR / RR No. (Optional)</label>
             <input type="text" value={dispatch.grNumber} onChange={(e) => setDispatch({...dispatch, grNumber: e.target.value})} className="w-full border border-slate-300 rounded-md p-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">GR Date</label>
+            <label className="block text-xs font-medium text-slate-700 mb-1">GR Date (Optional)</label>
             <input type="date" value={dispatch.grDate} onChange={(e) => setDispatch({...dispatch, grDate: e.target.value})} className="w-full border border-slate-300 rounded-md p-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          
+          {/* NEW: Date of Supply Field */}
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Date of Supply (Optional)</label>
+            <input type="date" value={dispatch.dateOfSupply} onChange={(e) => setDispatch({...dispatch, dateOfSupply: e.target.value})} className="w-full border border-slate-300 rounded-md p-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
         </div>
 
-        <div className="flex items-center gap-2 mb-4">
-          <input 
-            type="checkbox" 
-            id="consigneeCheck"
-            checked={dispatch.isConsigneeDifferent}
-            onChange={(e) => setDispatch({...dispatch, isConsigneeDifferent: e.target.checked})}
-            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 cursor-pointer"
-          />
-          <label htmlFor="consigneeCheck" className="text-sm font-medium text-slate-700 cursor-pointer">
-            Consignee (Shipped To) is different from Customer
-          </label>
+        <div className="flex flex-col gap-3 mb-4">
+          <div className="flex items-center gap-2">
+            <input 
+              type="checkbox" 
+              id="consigneeCheck"
+              checked={dispatch.isConsigneeDifferent}
+              onChange={(e) => setDispatch({...dispatch, isConsigneeDifferent: e.target.checked})}
+              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 cursor-pointer"
+            />
+            <label htmlFor="consigneeCheck" className="text-sm font-medium text-slate-700 cursor-pointer">
+              Consignee (Shipped To) is different from Customer
+            </label>
+          </div>
+
+          {/* NEW: Reverse Charge Toggle */}
+          <div className="flex items-center gap-2">
+            <input 
+              type="checkbox" 
+              id="reverseChargeCheck"
+              checked={dispatch.reverseCharge}
+              onChange={(e) => setDispatch({...dispatch, reverseCharge: e.target.checked})}
+              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 cursor-pointer"
+            />
+            <label htmlFor="reverseChargeCheck" className="text-sm font-medium text-slate-700 cursor-pointer">
+              Tax is payable on Reverse Charge
+            </label>
+          </div>
         </div>
 
         {dispatch.isConsigneeDifferent && (
@@ -447,58 +496,141 @@ export default function CreateQuotation() {
       {/* 4. TOTALS & SUMMARY SECTION */}
       <div className="flex flex-col md:flex-row justify-end gap-6 mt-4">
         
-        <div className="w-full md:w-1/3 space-y-4">
+        <div className="w-full md:w-5/12 space-y-4">
           <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-200">
             <h4 className="font-medium text-slate-800 mb-3 text-sm border-b pb-2">Additional Charges</h4>
             <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Packaging (₹)</label>
-                <input type="number" min="0" value={charges.packagingCharges || ""} onChange={(e) => setCharges({...charges, packagingCharges: parseFloat(e.target.value) || 0})} className="w-full border border-slate-300 rounded-md p-2 outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="0.00" />
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Packaging (₹)</label>
+                  <input type="number" min="0" value={charges.packagingCharges || ""} onChange={(e) => setCharges({...charges, packagingCharges: parseFloat(e.target.value) || 0})} className="w-full border border-slate-300 rounded-md p-2 outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="0.00" />
+                </div>
+                <div className="col-span-1">
+                  <label className="block text-xs font-medium text-slate-700 mb-1">GST (%)</label>
+                  <input type="number" min="0" value={charges.packagingGst || ""} onChange={(e) => setCharges({...charges, packagingGst: parseFloat(e.target.value) || 0})} className="w-full border border-slate-300 rounded-md p-2 outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
+                </div>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Carrier / Freight (₹)</label>
-                <input type="number" min="0" value={charges.carrierCharges || ""} onChange={(e) => setCharges({...charges, carrierCharges: parseFloat(e.target.value) || 0})} className="w-full border border-slate-300 rounded-md p-2 outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="0.00" />
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Carrier / Freight (₹)</label>
+                  <input type="number" min="0" value={charges.carrierCharges || ""} onChange={(e) => setCharges({...charges, carrierCharges: parseFloat(e.target.value) || 0})} className="w-full border border-slate-300 rounded-md p-2 outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="0.00" />
+                </div>
+                <div className="col-span-1">
+                  <label className="block text-xs font-medium text-slate-700 mb-1">GST (%)</label>
+                  <input type="number" min="0" value={charges.carrierGst || ""} onChange={(e) => setCharges({...charges, carrierGst: parseFloat(e.target.value) || 0})} className="w-full border border-slate-300 rounded-md p-2 outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
+                </div>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Other Costs (₹)</label>
-                <input type="number" min="0" value={charges.otherCosts || ""} onChange={(e) => setCharges({...charges, otherCosts: parseFloat(e.target.value) || 0})} className="w-full border border-slate-300 rounded-md p-2 outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="0.00" />
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Other Costs (₹)</label>
+                  <input type="number" min="0" value={charges.otherCosts || ""} onChange={(e) => setCharges({...charges, otherCosts: parseFloat(e.target.value) || 0})} className="w-full border border-slate-300 rounded-md p-2 outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="0.00" />
+                </div>
+                <div className="col-span-1">
+                  <label className="block text-xs font-medium text-slate-700 mb-1">GST (%)</label>
+                  <input type="number" min="0" value={charges.otherGst || ""} onChange={(e) => setCharges({...charges, otherGst: parseFloat(e.target.value) || 0})} className="w-full border border-slate-300 rounded-md p-2 outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
+                </div>
               </div>
             </div>
           </div>
         </div>
 
         <div className="w-full md:w-1/3 bg-white p-6 rounded-lg shadow-sm border border-slate-200">
-          <div className="space-y-2 text-sm text-slate-600">
-            <div className="flex justify-between">
-              <span>Total Taxable Value:</span>
-              <span className="font-medium text-slate-800">₹{totals.subtotalTaxable.toFixed(2)}</span>
-            </div>
+          <div className="space-y-1 text-sm text-slate-600">
             
-            {isLocal ? (
-              <>
-                <div className="flex justify-between">
-                  <span>Total CGST:</span>
-                  <span className="font-medium text-slate-800">₹{totals.totalCgst.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Total SGST:</span>
-                  <span className="font-medium text-slate-800">₹{totals.totalSgst.toFixed(2)}</span>
-                </div>
-              </>
-            ) : (
-              <div className="flex justify-between">
-                <span>Total IGST:</span>
-                <span className="font-medium text-slate-800">₹{totals.totalIgst.toFixed(2)}</span>
-              </div>
+            {/* Items Breakdown */}
+            <div className="flex justify-between font-medium text-slate-800 pt-1">
+              <span>Items Value:</span>
+              <span>₹{totals.subtotalTaxable.toFixed(2)}</span>
+            </div>
+            {totals.subtotalTaxable > 0 && (
+              isLocal ? (
+                <>
+                  <div className="flex justify-between text-xs pl-2 text-slate-500"><span>CGST on Items:</span><span>₹{totals.itemCgst.toFixed(2)}</span></div>
+                  <div className="flex justify-between text-xs pl-2 text-slate-500"><span>SGST on Items:</span><span>₹{totals.itemSgst.toFixed(2)}</span></div>
+                </>
+              ) : (
+                <div className="flex justify-between text-xs pl-2 text-slate-500"><span>IGST on Items:</span><span>₹{totals.itemIgst.toFixed(2)}</span></div>
+              )
             )}
 
-            {totals.extraChargesTotal > 0 && (
-              <div className="pt-2 text-xs text-slate-500 border-t border-slate-100 mt-2">
-                {totals.packaging > 0 && <div className="flex justify-between pt-1"><span>Packaging:</span><span>+₹{totals.packaging.toFixed(2)}</span></div>}
-                {totals.carrier > 0 && <div className="flex justify-between pt-1"><span>Freight:</span><span>+₹{totals.carrier.toFixed(2)}</span></div>}
-                {totals.other > 0 && <div className="flex justify-between pt-1"><span>Other Costs:</span><span>+₹{totals.other.toFixed(2)}</span></div>}
-              </div>
+            {/* Packaging Breakdown */}
+            {totals.packaging > 0 && (
+              <>
+                <div className="flex justify-between font-medium text-slate-800 pt-2">
+                  <span>Packaging Cost:</span>
+                  <span>₹{totals.packaging.toFixed(2)}</span>
+                </div>
+                {isLocal ? (
+                  <>
+                    <div className="flex justify-between text-xs pl-2 text-slate-500"><span>CGST on Pkg:</span><span>₹{totals.packagingCgst.toFixed(2)}</span></div>
+                    <div className="flex justify-between text-xs pl-2 text-slate-500"><span>SGST on Pkg:</span><span>₹{totals.packagingSgst.toFixed(2)}</span></div>
+                  </>
+                ) : (
+                  <div className="flex justify-between text-xs pl-2 text-slate-500"><span>IGST on Pkg:</span><span>₹{totals.packagingIgst.toFixed(2)}</span></div>
+                )}
+              </>
             )}
+
+            {/* Freight Breakdown */}
+            {totals.carrier > 0 && (
+              <>
+                <div className="flex justify-between font-medium text-slate-800 pt-2">
+                  <span>Freight Cost:</span>
+                  <span>₹{totals.carrier.toFixed(2)}</span>
+                </div>
+                {isLocal ? (
+                  <>
+                    <div className="flex justify-between text-xs pl-2 text-slate-500"><span>CGST on Freight:</span><span>₹{totals.carrierCgst.toFixed(2)}</span></div>
+                    <div className="flex justify-between text-xs pl-2 text-slate-500"><span>SGST on Freight:</span><span>₹{totals.carrierSgst.toFixed(2)}</span></div>
+                  </>
+                ) : (
+                  <div className="flex justify-between text-xs pl-2 text-slate-500"><span>IGST on Freight:</span><span>₹{totals.carrierIgst.toFixed(2)}</span></div>
+                )}
+              </>
+            )}
+
+            {/* Other Breakdown */}
+            {totals.other > 0 && (
+              <>
+                <div className="flex justify-between font-medium text-slate-800 pt-2">
+                  <span>Other Costs:</span>
+                  <span>₹{totals.other.toFixed(2)}</span>
+                </div>
+                {isLocal ? (
+                  <>
+                    <div className="flex justify-between text-xs pl-2 text-slate-500"><span>CGST on Other:</span><span>₹{totals.otherCgst.toFixed(2)}</span></div>
+                    <div className="flex justify-between text-xs pl-2 text-slate-500"><span>SGST on Other:</span><span>₹{totals.otherSgst.toFixed(2)}</span></div>
+                  </>
+                ) : (
+                  <div className="flex justify-between text-xs pl-2 text-slate-500"><span>IGST on Other:</span><span>₹{totals.otherIgst.toFixed(2)}</span></div>
+                )}
+              </>
+            )}
+            
+            {/* Final Totals */}
+            <div className="pt-3 border-t border-slate-200 mt-3 font-medium">
+              <div className="flex justify-between">
+                <span>Total Taxable Value:</span>
+                <span className="text-slate-800">₹{totals.totalTaxableValue.toFixed(2)}</span>
+              </div>
+              {isLocal ? (
+                <>
+                  <div className="flex justify-between">
+                    <span>Total CGST:</span>
+                    <span className="text-slate-800">₹{totals.finalCgst.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Total SGST:</span>
+                    <span className="text-slate-800">₹{totals.finalSgst.toFixed(2)}</span>
+                  </div>
+                </>
+              ) : (
+                <div className="flex justify-between">
+                  <span>Total IGST:</span>
+                  <span className="text-slate-800">₹{totals.finalIgst.toFixed(2)}</span>
+                </div>
+              )}
+            </div>
             
             <div className="border-t border-slate-300 pt-3 mt-3 flex justify-between items-center">
               <span className="text-lg font-bold text-slate-800">Grand Total:</span>
@@ -506,12 +638,22 @@ export default function CreateQuotation() {
             </div>
           </div>
 
-          <button 
-            onClick={handleSave}
-            className="w-full mt-6 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-md transition-colors shadow-sm"
-          >
-            Save & Generate Quotation
-          </button>
+          {/* NEW: Cancel Button Added Next to Save */}
+          <div className="flex gap-4 mt-6">
+            <button 
+              type="button"
+              onClick={() => router.push('/quotations')}
+              className="w-1/3 bg-slate-200 hover:bg-slate-300 text-slate-800 font-medium py-3 rounded-md transition-colors shadow-sm"
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={handleSave}
+              className="w-2/3 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-md transition-colors shadow-sm"
+            >
+              Save & Generate Bill
+            </button>
+          </div>
         </div>
       </div>
     </div>

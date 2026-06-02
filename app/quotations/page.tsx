@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { useRouter } from "next/navigation";
 
-export default function QuotationsDashboard() {
+export default function BillingDashboard() {
   const router = useRouter();
   const [quotations, setQuotations] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -18,20 +18,19 @@ export default function QuotationsDashboard() {
     const { data, error } = await supabase
       .from('quotations')
       .select('*, customers!fk_quotation_customer(business_name)')
-      .eq('is_active', true) // <-- NEW: Only fetch active quotations
+      .eq('is_active', true) 
       .order('bill_date', { ascending: false });
 
     if (error) {
-      console.error("Error fetching quotations:", error);
+      console.error("Error fetching bills:", error);
     } else if (data) {
       setQuotations(data);
     }
     setLoading(false);
   };
 
-  // --- NEW: Soft Delete Function ---
   const handleArchive = async (id: string) => {
-    if (!window.confirm("Are you sure you want to archive this quotation? It will be hidden from the dashboard.")) {
+    if (!window.confirm("Are you sure you want to archive this bill? It will be hidden from the dashboard.")) {
       return;
     }
 
@@ -41,9 +40,9 @@ export default function QuotationsDashboard() {
       .eq('id', id);
 
     if (error) {
-      alert("Error archiving quotation: " + error.message);
+      alert("Error archiving bill: " + error.message);
     } else {
-      fetchQuotations(); // Instantly refresh the list after archiving
+      fetchQuotations(); 
     }
   };
 
@@ -56,18 +55,18 @@ export default function QuotationsDashboard() {
   });
 
   return (
-    <div className="flex flex-col gap-6 relative">
+    <div className="flex flex-col gap-6 relative max-w-7xl mx-auto p-4 md:p-8">
       {/* HEADER */}
-      <div className="flex justify-between items-center bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center bg-white p-6 rounded-lg shadow-sm border border-slate-200 gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800">Quotations Dashboard</h2>
-          <p className="text-slate-500 text-sm mt-1">Manage, search, and print your generated quotations.</p>
+          <h2 className="text-2xl font-bold text-slate-800">Billing Dashboard</h2>
+          <p className="text-slate-500 text-sm mt-1">Manage, search, edit, and print your generated bills.</p>
         </div>
         <button 
           onClick={() => router.push('/quotations/new')}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition-colors shadow-sm"
+          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-md font-medium transition-colors shadow-sm whitespace-nowrap"
         >
-          + Create New Quotation
+          + Create New Bill
         </button>
       </div>
 
@@ -106,21 +105,21 @@ export default function QuotationsDashboard() {
               ) : filteredQuotes.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="p-8 text-center text-slate-400 italic">
-                    {searchTerm ? "No quotations found matching your search." : "No active quotations found. Click 'Create New Quotation' to get started."}
+                    {searchTerm ? "No bills found matching your search." : "No active bills found. Click 'Create New Bill' to get started."}
                   </td>
                 </tr>
               ) : (
                 filteredQuotes.map((quote) => (
                   <tr key={quote.id} className="hover:bg-slate-50 transition-colors">
                     <td className="p-4 font-medium text-slate-700">
-                      {new Date(quote.bill_date).toLocaleDateString('en-IN')}
+                      {quote.bill_date ? new Date(quote.bill_date).toLocaleDateString('en-IN') : 'N/A'}
                     </td>
-                    <td className="p-4 font-bold text-slate-800">{quote.quotation_no}</td>
+                    <td className="p-4 font-bold text-slate-800">{quote.bill_no}</td>
                     <td className="p-4 truncate max-w-[250px]">{quote.customers?.business_name || 'Unknown'}</td>
                     <td className="p-4 text-right">₹{Number(quote.subtotal).toFixed(2)}</td>
                     <td className="p-4 text-right font-bold text-blue-600">₹{Number(quote.grand_total).toFixed(2)}</td>
                     
-                    {/* UPDATED ACTIONS COLUMN */}
+                    {/* ACTIONS COLUMN WITH EDIT BUTTON */}
                     <td className="p-4 text-center">
                       <div className="flex justify-center gap-2">
                         <button 
@@ -129,6 +128,14 @@ export default function QuotationsDashboard() {
                         >
                           🖨️ View
                         </button>
+                        
+                        <button 
+                          onClick={() => router.push(`/quotations/${quote.id}/edit`)} 
+                          className="text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider transition-colors"
+                        >
+                          ✏️ Edit
+                        </button>
+
                         <button 
                           onClick={() => handleArchive(quote.id)} 
                           className="text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider transition-colors"
