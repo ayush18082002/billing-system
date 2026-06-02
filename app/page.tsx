@@ -79,11 +79,19 @@ export default function DashboardAndReport() {
 
     const combinedData = lineItems.map(item => {
       const parentBill = bills.find(b => b.id === item.quotation_id);
+      
+      // FIXED: Safely extract customer name whether it's an array or an object
+      let cName = 'Unknown';
+      if (parentBill && parentBill.customers) {
+        const cData: any = parentBill.customers;
+        cName = Array.isArray(cData) ? cData[0]?.business_name : cData.business_name;
+      }
+
       return {
         id: item.id,
         bill_no: parentBill?.bill_no || 'Unknown',
         bill_date: parentBill?.bill_date || '',
-        customer_name: parentBill?.customers?.business_name || 'Unknown',
+        customer_name: cName || 'Unknown',
         product_head: item.products?.product_head || 'N/A',
         product_name: item.products?.name || 'Deleted Product',
         qty: item.qty,
@@ -154,6 +162,13 @@ export default function DashboardAndReport() {
       const parentBill = bills.find(b => b.id === item.quotation_id);
       if (!parentBill) return;
 
+      // FIXED: Safely extract customer name whether it's an array or an object
+      let cName = 'Unknown';
+      if (parentBill.customers) {
+        const cData: any = parentBill.customers;
+        cName = Array.isArray(cData) ? cData[0]?.business_name : cData.business_name;
+      }
+
       const productName = item.products?.name || 'Deleted Product';
       const key = `${parentBill.bill_no}_${productName}_${item.rate}`;
 
@@ -161,7 +176,7 @@ export default function DashboardAndReport() {
         grouped[key] = {
           bill_no: parentBill.bill_no,
           bill_date: parentBill.bill_date,
-          customer_name: parentBill.customers?.business_name || 'Unknown',
+          customer_name: cName || 'Unknown',
           product_name: productName,
           qty: 0,
           rate: Number(item.rate)
