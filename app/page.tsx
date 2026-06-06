@@ -18,8 +18,7 @@ export default function DashboardAndReport() {
 
   // --- CUSTOMER MODULE STATE ---
   const [customers, setCustomers] = useState<any[]>([]);
-  const [showCustomers, setShowCustomers] = useState(false);
-  const [customerSearch, setCustomerSearch] = useState("");
+  const [showLedger, setShowLedger] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
   const [customerSalesData, setCustomerSalesData] = useState<any[]>([]);
   const [loadingCustomer, setLoadingCustomer] = useState(false);
@@ -282,11 +281,6 @@ export default function DashboardAndReport() {
   };
 
   // --- HELPERS ---
-  const filteredCustomersDirectory = customers.filter(c => 
-    c.business_name?.toLowerCase().includes(customerSearch.toLowerCase()) ||
-    c.phone?.includes(customerSearch)
-  );
-
   const customerDropdownOptions = [{ value: null, label: "-- All Customers --" }, ...customers.map(c => ({ value: c.id, label: c.business_name }))];
   const gstDropdownOptions = [{ value: "0", label: "0% Exempted" }, { value: "5", label: "5% GST Slab" }, { value: "12", label: "12% GST Slab" }, { value: "18", label: "18% GST Slab" }, { value: "28", label: "28% GST Slab" }];
 
@@ -329,41 +323,8 @@ export default function DashboardAndReport() {
           {/* ========================================================= */}
           {activeModule === "customer" && (
             <div className="space-y-6 animate-in fade-in duration-200">
-              
-              {/* HIDDEN DIRECTORY FEATURE */}
-              <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden no-print">
-                <div className="p-4 border-b border-slate-200 bg-slate-50 flex flex-wrap justify-between items-center gap-4">
-                  <div className="flex items-center gap-3">
-                    <h3 className="font-semibold text-slate-800 text-lg">Customer Directory</h3>
-                    <button onClick={() => setShowCustomers(!showCustomers)} className="p-1.5 rounded-md hover:bg-slate-200 text-slate-600 transition-colors" title={showCustomers ? "Hide Directory" : "Show Directory"}>
-                      {showCustomers ? (
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
-                      ) : (
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                      )}
-                    </button>
-                  </div>
-                  <input type="text" placeholder="Search Business Name..." value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)} className="border border-slate-300 rounded p-2 text-sm w-full md:w-64 outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                {(showCustomers || customerSearch.length > 0) ? (
-                  <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
-                    <table className="w-full text-left text-sm text-slate-600">
-                      <thead className="bg-slate-100 border-b border-slate-200 text-slate-800 text-xs uppercase tracking-wider sticky top-0">
-                        <tr><th className="p-3 font-semibold">Business Name</th><th className="p-3 font-semibold">Phone</th><th className="p-3 font-semibold">GSTIN</th></tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200">
-                        {filteredCustomersDirectory.map((cust) => (
-                          <tr key={cust.id} className="hover:bg-slate-50"><td className="p-3 font-bold text-slate-800">{cust.business_name}</td><td className="p-3">{cust.phone || 'N/A'}</td><td className="p-3 uppercase">{cust.gstin || 'Unregistered'}</td></tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="p-6 text-center text-slate-400 italic text-sm">Customer directory is hidden. Click the eye icon or use the search bar to display.</div>
-                )}
-              </div>
 
-              {/* CUSTOMER SALES LEDGER */}
+              {/* CUSTOMER SALES LEDGER PARAMETERS */}
               <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 no-print">
                 <h3 className="font-semibold text-slate-800 mb-4 border-b pb-2 text-sm">Customer Sales Ledger Parameters</h3>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
@@ -374,33 +335,56 @@ export default function DashboardAndReport() {
                 </div>
               </div>
 
+              {/* CUSTOMER SALES LEDGER RESULTS (With Eye Toggle) */}
               <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
                 <div className="p-4 border-b border-slate-200 bg-slate-50 flex flex-col md:flex-row justify-between items-center gap-4">
-                  <h3 className="font-semibold text-slate-800">Ledger Results <span className="text-xs font-normal text-slate-500 block print:hidden">({sharedDates.startDate} to {sharedDates.endDate})</span></h3>
+                  <div className="flex items-center gap-3">
+                    <h3 className="font-semibold text-slate-800">Ledger Results <span className="text-xs font-normal text-slate-500 block print:hidden">({sharedDates.startDate} to {sharedDates.endDate})</span></h3>
+                    
+                    {/* --- EYE TOGGLE BUTTON --- */}
+                    <button 
+                      onClick={() => setShowLedger(!showLedger)} 
+                      className="p-1.5 rounded-md hover:bg-slate-200 text-slate-600 transition-colors no-print" 
+                      title={showLedger ? "Hide Ledger" : "Show Ledger"}
+                    >
+                      {showLedger ? (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
+                      ) : (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                      )}
+                    </button>
+                  </div>
+                  
                   <div className="flex gap-2 no-print">
                     <button onClick={() => handleExport('customer')} className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded text-xs font-bold uppercase transition-colors">📥 Excel</button>
                     <button onClick={() => window.print()} className="bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded text-xs font-bold uppercase transition-colors">🖨️ PDF / Print</button>
                   </div>
                 </div>
-                <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
-                  <table className="w-full text-left text-sm text-slate-600 whitespace-nowrap">
-                    <thead className="bg-slate-100 border-b border-slate-200 text-slate-800 text-xs uppercase tracking-wider sticky top-0">
-                      <tr><th className="p-4">Date</th><th className="p-4">Customer</th><th className="p-4">Bill No.</th><th className="p-4">Product Name</th><th className="p-4 text-center">Qty</th><th className="p-4 text-right">Unit Rate</th><th className="p-4 text-right">Taxable Value</th></tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200 text-xs md:text-sm">
-                      {loadingCustomer ? (<tr><td colSpan={7} className="p-10 text-center font-medium">Processing logs...</td></tr>) : customerSalesData.length === 0 ? (<tr><td colSpan={7} className="p-10 text-center text-slate-400 italic">No transactions identified within selection range.</td></tr>) : (
-                        customerSalesData.map((row) => (
-                          <tr key={row.id} className="hover:bg-slate-50 transition-colors">
-                            <td className="p-4">{new Date(row.bill_date).toLocaleDateString('en-IN')}</td><td className="p-4 font-medium text-slate-700 truncate max-w-[200px] whitespace-normal">{row.customer_name}</td>
-                            <td className="p-4 font-bold text-slate-800">{row.bill_no}</td>
-                            <td className="p-4">{row.product_name}</td><td className="p-4 text-center font-medium">{row.qty}</td>
-                            <td className="p-4 text-right">₹{Number(row.rate).toFixed(2)}</td><td className="p-4 text-right font-bold text-emerald-600">₹{Number(row.taxable_amount).toFixed(2)}</td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                
+                {/* --- TOGGLE VISIBILITY CONDITIONAL --- */}
+                {showLedger ? (
+                  <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+                    <table className="w-full text-left text-sm text-slate-600 whitespace-nowrap">
+                      <thead className="bg-slate-100 border-b border-slate-200 text-slate-800 text-xs uppercase tracking-wider sticky top-0">
+                        <tr><th className="p-4">Date</th><th className="p-4">Customer</th><th className="p-4">Bill No.</th><th className="p-4">Product Name</th><th className="p-4 text-center">Qty</th><th className="p-4 text-right">Unit Rate</th><th className="p-4 text-right">Taxable Value</th></tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200 text-xs md:text-sm">
+                        {loadingCustomer ? (<tr><td colSpan={7} className="p-10 text-center font-medium">Processing logs...</td></tr>) : customerSalesData.length === 0 ? (<tr><td colSpan={7} className="p-10 text-center text-slate-400 italic">No transactions identified within selection range.</td></tr>) : (
+                          customerSalesData.map((row) => (
+                            <tr key={row.id} className="hover:bg-slate-50 transition-colors">
+                              <td className="p-4">{new Date(row.bill_date).toLocaleDateString('en-IN')}</td><td className="p-4 font-medium text-slate-700 truncate max-w-[200px] whitespace-normal">{row.customer_name}</td>
+                              <td className="p-4 font-bold text-slate-800">{row.bill_no}</td>
+                              <td className="p-4">{row.product_name}</td><td className="p-4 text-center font-medium">{row.qty}</td>
+                              <td className="p-4 text-right">₹{Number(row.rate).toFixed(2)}</td><td className="p-4 text-right font-bold text-emerald-600">₹{Number(row.taxable_amount).toFixed(2)}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="p-10 text-center text-slate-400 italic text-sm">Ledger is hidden. Click the eye icon to display results.</div>
+                )}
               </div>
             </div>
           )}
