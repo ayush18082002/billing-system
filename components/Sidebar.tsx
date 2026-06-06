@@ -8,7 +8,6 @@ export default function Sidebar() {
       </h1>
       
       <nav className="flex flex-col gap-2">
-        {/* Updated from "Dashboard" to "Dashboard and Report" */}
         <Link href="/" className="hover:bg-slate-800 p-3 rounded transition-colors">
           Dashboard and Report
         </Link>

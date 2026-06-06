@@ -8,8 +8,7 @@ import * as XLSX from "xlsx";
 export default function DashboardAndReport() {
   const [activeModule, setActiveModule] = useState<"customer" | "gst" | "item_price" | "products">("customer");
 
-  const [customers, setCustomers] = useState<any[]>([]);
-  
+  // --- SHARED STATE ---
   const today = new Date();
   const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
   const [sharedDates, setSharedDates] = useState({
@@ -17,40 +16,49 @@ export default function DashboardAndReport() {
     endDate: today.toISOString().split('T')[0],
   });
 
+  // --- CUSTOMER MODULE STATE ---
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [showCustomers, setShowCustomers] = useState(false);
+  const [customerSearch, setCustomerSearch] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
   const [customerSalesData, setCustomerSalesData] = useState<any[]>([]);
   const [loadingCustomer, setLoadingCustomer] = useState(false);
 
+  // --- GST MODULE STATE ---
   const [selectedGstRate, setSelectedGstRate] = useState<string | null>("18");
-  const [gstProductData, setGstProductData] = useState<any[]>([]);
+  const [gstReportData, setGstReportData] = useState<any[]>([]);
   const [loadingGst, setLoadingGst] = useState(false);
 
+  // --- ITEM PRICE MODULE STATE ---
   const [topItems, setTopItems] = useState<any[]>([]);
   const [bottomItems, setBottomItems] = useState<any[]>([]);
   const [loadingItemPrice, setLoadingItemPrice] = useState(false);
 
+  // --- PRODUCTS MODULE STATE ---
+  const [productsList, setProductsList] = useState<any[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<string | null>(null);
   const [productsReportData, setProductsReportData] = useState<any[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
 
   useEffect(() => {
-    fetchCustomers();
+    fetchInitialData();
+    // Default load for the first tab
     generateCustomerReport(); 
-    generateGstReport();
-    generateItemPriceReport();
-    generateProductsReport();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    generateGstReport();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedGstRate]);
+  const fetchInitialData = async () => {
+    const { data: custData } = await supabase.from('customers').select('*').order('business_name');
+    if (custData) setCustomers(custData);
 
-  const fetchCustomers = async () => {
-    const { data } = await supabase.from('customers').select('*').order('business_name');
-    if (data) setCustomers(data);
+    const { data: prodData } = await supabase.from('products').select('id, name').order('name');
+    if (prodData) {
+      setProductsList(prodData);
+      if (prodData.length > 0) setSelectedProduct(prodData[0].id);
+    }
   };
 
+  // --- MASTER DATA FETCHER ---
   const fetchSalesDataInRange = async (startDate: string, endDate: string, customerId: string | null = null) => {
     let query = supabase
       .from('quotations')
@@ -73,6 +81,9 @@ export default function DashboardAndReport() {
     return { bills, lineItems: lineItems || [] };
   };
 
+  // =========================================================================
+  // 1. CUSTOMER REPORT GENERATOR
+  // =========================================================================
   const generateCustomerReport = async () => {
     setLoadingCustomer(true);
     const { bills, lineItems } = await fetchSalesDataInRange(sharedDates.startDate, sharedDates.endDate, selectedCustomer);
@@ -80,7 +91,6 @@ export default function DashboardAndReport() {
     const combinedData = lineItems.map(item => {
       const parentBill = bills.find(b => b.id === item.quotation_id);
       
-      // FIXED: Safely extract customer name whether it's an array or an object
       let cName = 'Unknown';
       if (parentBill && parentBill.customers) {
         const cData: any = parentBill.customers;
@@ -105,16 +115,34 @@ export default function DashboardAndReport() {
     setLoadingCustomer(false);
   };
 
+  // =========================================================================
+  // 2. GST REPORT GENERATOR (Aggregates sales by Item for a specific slab)
+  // =========================================================================
   const generateGstReport = async () => {
     setLoadingGst(true);
-    let query = supabase.from('products').select('*');
-    if (selectedGstRate) query = query.eq('gst_rate', Number(selectedGstRate));
+    const { lineItems } = await fetchSalesDataInRange(sharedDates.startDate, sharedDates.endDate);
+    
+    // Filter for the selected GST slab
+    const filteredItems = lineItems.filter(item => Number(item.gst_percent) === Number(selectedGstRate));
 
-    const { data } = await query.order('product_head').order('name');
-    setGstProductData(data || []);
+    // Aggregate by Product Name
+    const grouped: Record<string, any> = {};
+    filteredItems.forEach(item => {
+      const pName = item.products?.name || 'Deleted Product';
+      if (!grouped[pName]) {
+        grouped[pName] = { product_name: pName, qty: 0, taxable_amount: 0 };
+      }
+      grouped[pName].qty += Number(item.qty);
+      grouped[pName].taxable_amount += Number(item.taxable_amount);
+    });
+
+    setGstReportData(Object.values(grouped).sort((a, b) => b.taxable_amount - a.taxable_amount));
     setLoadingGst(false);
   };
 
+  // =========================================================================
+  // 3. ITEM PRICE REPORT GENERATOR (Top 10 / Bottom 10)
+  // =========================================================================
   const generateItemPriceReport = async () => {
     setLoadingItemPrice(true);
     const { lineItems } = await fetchSalesDataInRange(sharedDates.startDate, sharedDates.endDate);
@@ -152,45 +180,35 @@ export default function DashboardAndReport() {
     setLoadingItemPrice(false);
   };
 
+  // =========================================================================
+  // 4. PRODUCTS REPORT GENERATOR (Specific Item search with Aggregates)
+  // =========================================================================
   const generateProductsReport = async () => {
     setLoadingProducts(true);
     const { bills, lineItems } = await fetchSalesDataInRange(sharedDates.startDate, sharedDates.endDate);
 
-    const grouped: Record<string, any> = {};
+    // Filter only for the specifically selected product
+    const specificItemSales = lineItems.filter(item => item.product_id === selectedProduct);
 
-    lineItems.forEach(item => {
+    const detailedData = specificItemSales.map(item => {
       const parentBill = bills.find(b => b.id === item.quotation_id);
-      if (!parentBill) return;
-
-      // FIXED: Safely extract customer name whether it's an array or an object
-      let cName = 'Unknown';
-      if (parentBill.customers) {
-        const cData: any = parentBill.customers;
-        cName = Array.isArray(cData) ? cData[0]?.business_name : cData.business_name;
-      }
-
-      const productName = item.products?.name || 'Deleted Product';
-      const key = `${parentBill.bill_no}_${productName}_${item.rate}`;
-
-      if (!grouped[key]) {
-        grouped[key] = {
-          bill_no: parentBill.bill_no,
-          bill_date: parentBill.bill_date,
-          customer_name: cName || 'Unknown',
-          product_name: productName,
-          qty: 0,
-          rate: Number(item.rate)
-        };
-      }
-      grouped[key].qty += Number(item.qty);
+      return {
+        id: item.id,
+        bill_no: parentBill?.bill_no || 'Unknown',
+        bill_date: parentBill?.bill_date || '',
+        product_name: item.products?.name || 'Deleted Product',
+        qty: Number(item.qty),
+        rate: Number(item.rate),
+        taxable_amount: Number(item.taxable_amount)
+      };
     });
 
-    const finalizedData = Object.values(grouped).sort((a, b) => new Date(b.bill_date).getTime() - new Date(a.bill_date).getTime());
-    
-    setProductsReportData(finalizedData);
+    detailedData.sort((a, b) => new Date(a.bill_date).getTime() - new Date(b.bill_date).getTime());
+    setProductsReportData(detailedData);
     setLoadingProducts(false);
   };
 
+  // --- EXPORT FUNCTION ---
   const handleExport = (module: string) => {
     const wb = XLSX.utils.book_new(); 
 
@@ -212,17 +230,15 @@ export default function DashboardAndReport() {
     } 
     
     else if (module === 'gst') {
-      if (gstProductData.length === 0) return alert("No data to export!");
-      const wsData = gstProductData.map(row => ({
-        "Product Head": row.product_head,
-        "Product Name": row.name,
-        "HSN Code": row.hsn_code,
-        "UOM": row.uom,
-        "Status": row.is_active ? "Active" : "Inactive"
+      if (gstReportData.length === 0) return alert("No data to export!");
+      const wsData = gstReportData.map(row => ({
+        "Product Name": row.product_name,
+        "Total Qty Sold": row.qty,
+        "Total Taxable Amount": row.taxable_amount
       }));
       const ws = XLSX.utils.json_to_sheet(wsData);
-      XLSX.utils.book_append_sheet(wb, ws, `${selectedGstRate}% GST Products`);
-      XLSX.writeFile(wb, `GST_${selectedGstRate}Percent_Products.xlsx`);
+      XLSX.utils.book_append_sheet(wb, ws, `${selectedGstRate}% GST Sales`);
+      XLSX.writeFile(wb, `GST_${selectedGstRate}Percent_Sales_${sharedDates.startDate}.xlsx`);
     } 
     
     else if (module === 'item_price') {
@@ -252,30 +268,30 @@ export default function DashboardAndReport() {
     else if (module === 'products') {
       if (productsReportData.length === 0) return alert("No data to export!");
       const wsData = productsReportData.map(row => ({
+        "Date": new Date(row.bill_date).toLocaleDateString('en-IN'),
         "Bill No": row.bill_no,
-        "Customer Name": row.customer_name,
         "Product Name": row.product_name,
         "Qty Sold": row.qty,
-        "Single Rate": row.rate
+        "Selling Price": row.rate,
+        "Total Item Value": row.taxable_amount
       }));
       const ws = XLSX.utils.json_to_sheet(wsData);
-      XLSX.utils.book_append_sheet(wb, ws, "Cumulative Sales");
-      XLSX.writeFile(wb, `Cumulative_Products_Report_${sharedDates.startDate}_to_${sharedDates.endDate}.xlsx`);
+      XLSX.utils.book_append_sheet(wb, ws, "Product History");
+      XLSX.writeFile(wb, `Product_Sales_Report_${sharedDates.startDate}_to_${sharedDates.endDate}.xlsx`);
     }
   };
 
-  const totalTaxableRevenue = customerSalesData.reduce((sum, row) => sum + Number(row.taxable_amount), 0);
-  const totalItemsSold = customerSalesData.reduce((sum, row) => sum + Number(row.qty), 0);
-  const uniqueBills = new Set(customerSalesData.map(r => r.bill_no)).size;
-  const totalGstProducts = gstProductData.length;
-  const activeGstProducts = gstProductData.filter(p => p.is_active).length;
+  // --- HELPERS ---
+  const filteredCustomersDirectory = customers.filter(c => 
+    c.business_name?.toLowerCase().includes(customerSearch.toLowerCase()) ||
+    c.phone?.includes(customerSearch)
+  );
 
   const customerDropdownOptions = [{ value: null, label: "-- All Customers --" }, ...customers.map(c => ({ value: c.id, label: c.business_name }))];
   const gstDropdownOptions = [{ value: "0", label: "0% Exempted" }, { value: "5", label: "5% GST Slab" }, { value: "12", label: "12% GST Slab" }, { value: "18", label: "18% GST Slab" }, { value: "28", label: "28% GST Slab" }];
 
   return (
     <>
-      {/* --- PRINT STYLES WITH TABLE FIXES --- */}
       <style dangerouslySetInnerHTML={{
         __html: `
           @media print {
@@ -283,16 +299,9 @@ export default function DashboardAndReport() {
             #printable-report, #printable-report * { visibility: visible; }
             #printable-report { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; }
             .no-print { display: none !important; }
-            
-            /* Table Wrapping Fixes for Print */
             .overflow-x-auto { overflow: visible !important; }
             table { width: 100% !important; table-layout: auto !important; font-size: 11px !important; }
-            th, td { 
-              padding: 6px 4px !important; 
-              white-space: normal !important; 
-              word-break: break-word !important; 
-            }
-            .truncate { white-space: normal !important; overflow: visible !important; text-overflow: clip !important; max-width: none !important; }
+            th, td { padding: 6px 4px !important; white-space: normal !important; word-break: break-word !important; }
           }
         `
       }} />
@@ -321,8 +330,42 @@ export default function DashboardAndReport() {
           {activeModule === "customer" && (
             <div className="space-y-6 animate-in fade-in duration-200">
               
+              {/* HIDDEN DIRECTORY FEATURE */}
+              <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden no-print">
+                <div className="p-4 border-b border-slate-200 bg-slate-50 flex flex-wrap justify-between items-center gap-4">
+                  <div className="flex items-center gap-3">
+                    <h3 className="font-semibold text-slate-800 text-lg">Customer Directory</h3>
+                    <button onClick={() => setShowCustomers(!showCustomers)} className="p-1.5 rounded-md hover:bg-slate-200 text-slate-600 transition-colors" title={showCustomers ? "Hide Directory" : "Show Directory"}>
+                      {showCustomers ? (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
+                      ) : (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                      )}
+                    </button>
+                  </div>
+                  <input type="text" placeholder="Search Business Name..." value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)} className="border border-slate-300 rounded p-2 text-sm w-full md:w-64 outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                {(showCustomers || customerSearch.length > 0) ? (
+                  <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
+                    <table className="w-full text-left text-sm text-slate-600">
+                      <thead className="bg-slate-100 border-b border-slate-200 text-slate-800 text-xs uppercase tracking-wider sticky top-0">
+                        <tr><th className="p-3 font-semibold">Business Name</th><th className="p-3 font-semibold">Phone</th><th className="p-3 font-semibold">GSTIN</th></tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200">
+                        {filteredCustomersDirectory.map((cust) => (
+                          <tr key={cust.id} className="hover:bg-slate-50"><td className="p-3 font-bold text-slate-800">{cust.business_name}</td><td className="p-3">{cust.phone || 'N/A'}</td><td className="p-3 uppercase">{cust.gstin || 'Unregistered'}</td></tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="p-6 text-center text-slate-400 italic text-sm">Customer directory is hidden. Click the eye icon or use the search bar to display.</div>
+                )}
+              </div>
+
+              {/* CUSTOMER SALES LEDGER */}
               <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 no-print">
-                <h3 className="font-semibold text-slate-800 mb-4 border-b pb-2 text-sm">Customer Report Parameters</h3>
+                <h3 className="font-semibold text-slate-800 mb-4 border-b pb-2 text-sm">Customer Sales Ledger Parameters</h3>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                   <div><label className="block text-xs font-medium text-slate-700 mb-1">From Date</label><input type="date" value={sharedDates.startDate} onChange={(e) => setSharedDates({...sharedDates, startDate: e.target.value})} className="w-full border border-slate-300 rounded-md p-2 text-sm outline-none" /></div>
                   <div><label className="block text-xs font-medium text-slate-700 mb-1">To Date</label><input type="date" value={sharedDates.endDate} onChange={(e) => setSharedDates({...sharedDates, endDate: e.target.value})} className="w-full border border-slate-300 rounded-md p-2 text-sm outline-none" /></div>
@@ -331,33 +374,27 @@ export default function DashboardAndReport() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 no-print">
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 border-l-4 border-l-blue-600"><p className="text-sm font-medium text-slate-500">Taxable Revenue (w/o GST)</p><p className="text-3xl font-bold text-slate-800 mt-1">₹{totalTaxableRevenue.toFixed(2)}</p></div>
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 border-l-4 border-l-emerald-500"><p className="text-sm font-medium text-slate-500">Total Volume Sold (Qty)</p><p className="text-3xl font-bold text-slate-800 mt-1">{totalItemsSold}</p></div>
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 border-l-4 border-l-purple-500"><p className="text-sm font-medium text-slate-500">Associated Bills</p><p className="text-3xl font-bold text-slate-800 mt-1">{uniqueBills}</p></div>
-              </div>
-
               <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
                 <div className="p-4 border-b border-slate-200 bg-slate-50 flex flex-col md:flex-row justify-between items-center gap-4">
-                  <h3 className="font-semibold text-slate-800">Customer Sales Ledger <span className="text-xs font-normal text-slate-500 block print:hidden">({sharedDates.startDate} to {sharedDates.endDate})</span></h3>
+                  <h3 className="font-semibold text-slate-800">Ledger Results <span className="text-xs font-normal text-slate-500 block print:hidden">({sharedDates.startDate} to {sharedDates.endDate})</span></h3>
                   <div className="flex gap-2 no-print">
                     <button onClick={() => handleExport('customer')} className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded text-xs font-bold uppercase transition-colors">📥 Excel</button>
                     <button onClick={() => window.print()} className="bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded text-xs font-bold uppercase transition-colors">🖨️ PDF / Print</button>
                   </div>
                 </div>
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
                   <table className="w-full text-left text-sm text-slate-600 whitespace-nowrap">
-                    <thead className="bg-slate-100 border-b border-slate-200 text-slate-800 text-xs uppercase tracking-wider">
-                      <tr><th className="p-4">Date</th><th className="p-4">Customer</th><th className="p-4">Bill No.</th><th className="p-4">Product Head</th><th className="p-4">Product Name</th><th className="p-4 text-center">Qty</th><th className="p-4 text-right">Unit Rate</th><th className="p-4 text-right">Total (w/o GST)</th></tr>
+                    <thead className="bg-slate-100 border-b border-slate-200 text-slate-800 text-xs uppercase tracking-wider sticky top-0">
+                      <tr><th className="p-4">Date</th><th className="p-4">Customer</th><th className="p-4">Bill No.</th><th className="p-4">Product Name</th><th className="p-4 text-center">Qty</th><th className="p-4 text-right">Unit Rate</th><th className="p-4 text-right">Taxable Value</th></tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 text-xs md:text-sm">
-                      {loadingCustomer ? (<tr><td colSpan={8} className="p-10 text-center font-medium">Processing logs...</td></tr>) : customerSalesData.length === 0 ? (<tr><td colSpan={8} className="p-10 text-center text-slate-400 italic">No transactions identified within selection range.</td></tr>) : (
+                      {loadingCustomer ? (<tr><td colSpan={7} className="p-10 text-center font-medium">Processing logs...</td></tr>) : customerSalesData.length === 0 ? (<tr><td colSpan={7} className="p-10 text-center text-slate-400 italic">No transactions identified within selection range.</td></tr>) : (
                         customerSalesData.map((row) => (
                           <tr key={row.id} className="hover:bg-slate-50 transition-colors">
                             <td className="p-4">{new Date(row.bill_date).toLocaleDateString('en-IN')}</td><td className="p-4 font-medium text-slate-700 truncate max-w-[200px] whitespace-normal">{row.customer_name}</td>
-                            <td className="p-4 font-bold text-slate-800">{row.bill_no}</td><td className="p-4 text-slate-500">{row.product_head}</td>
+                            <td className="p-4 font-bold text-slate-800">{row.bill_no}</td>
                             <td className="p-4">{row.product_name}</td><td className="p-4 text-center font-medium">{row.qty}</td>
-                            <td className="p-4 text-right">₹{Number(row.rate).toFixed(2)}</td><td className="p-4 text-right font-bold text-blue-600">₹{Number(row.taxable_amount).toFixed(2)}</td>
+                            <td className="p-4 text-right">₹{Number(row.rate).toFixed(2)}</td><td className="p-4 text-right font-bold text-emerald-600">₹{Number(row.taxable_amount).toFixed(2)}</td>
                           </tr>
                         ))
                       )}
@@ -373,37 +410,36 @@ export default function DashboardAndReport() {
           {/* ========================================================= */}
           {activeModule === "gst" && (
             <div className="space-y-6 animate-in fade-in duration-200">
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 max-w-xl no-print">
-                <h3 className="font-semibold text-slate-800 mb-3 text-sm">Tax Bracket Engine</h3>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Select Active GST Slab</label>
-                <Select options={gstDropdownOptions} value={gstDropdownOptions.find(o => o.value === selectedGstRate)} onChange={(option: any) => setSelectedGstRate(option?.value || null)} className="text-sm" />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 no-print">
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 border-l-4 border-l-purple-600"><p className="text-sm font-medium text-slate-500">Total Products in Bracket</p><p className="text-3xl font-bold text-slate-800 mt-1">{totalGstProducts}</p></div>
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 border-l-4 border-l-indigo-500"><p className="text-sm font-medium text-slate-500">Active Status</p><p className="text-3xl font-bold text-slate-800 mt-1"><span className="text-emerald-600">{activeGstProducts}</span><span className="text-slate-300 font-light mx-2">/</span><span className="text-red-500">{totalGstProducts - activeGstProducts}</span></p></div>
+              <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 no-print">
+                <h3 className="font-semibold text-slate-800 mb-4 border-b pb-2 text-sm">GST Sales Aggregator</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                  <div><label className="block text-xs font-medium text-slate-700 mb-1">From Date</label><input type="date" value={sharedDates.startDate} onChange={(e) => setSharedDates({...sharedDates, startDate: e.target.value})} className="w-full border border-slate-300 rounded-md p-2 text-sm outline-none" /></div>
+                  <div><label className="block text-xs font-medium text-slate-700 mb-1">To Date</label><input type="date" value={sharedDates.endDate} onChange={(e) => setSharedDates({...sharedDates, endDate: e.target.value})} className="w-full border border-slate-300 rounded-md p-2 text-sm outline-none" /></div>
+                  <div><label className="block text-xs font-medium text-slate-700 mb-1">Tax Slab</label><Select options={gstDropdownOptions} value={gstDropdownOptions.find(o => o.value === selectedGstRate)} onChange={(option: any) => setSelectedGstRate(option?.value || null)} className="text-sm" /></div>
+                  <div className="flex justify-end"><button onClick={generateGstReport} disabled={loadingGst} className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-5 py-2 text-sm rounded-md transition-colors w-full shadow-sm">{loadingGst ? "Calculating..." : "Generate GST Report"}</button></div>
+                </div>
               </div>
 
               <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
                 <div className="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
-                  <h3 className="font-semibold text-slate-800">Product Mapping Matrix <span className="text-xs font-normal text-slate-500 ml-2">({selectedGstRate}% GST Slab)</span></h3>
+                  <h3 className="font-semibold text-slate-800">Sales under {selectedGstRate}% Slab</h3>
                   <div className="flex gap-2 no-print">
                     <button onClick={() => handleExport('gst')} className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded text-xs font-bold uppercase transition-colors">📥 Excel</button>
                     <button onClick={() => window.print()} className="bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded text-xs font-bold uppercase transition-colors">🖨️ PDF / Print</button>
                   </div>
                 </div>
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
                   <table className="w-full text-left text-sm text-slate-600 whitespace-nowrap">
-                    <thead className="bg-slate-100 border-b border-slate-200 text-slate-800 text-xs uppercase tracking-wider">
-                      <tr><th className="p-4 w-12 text-center">#</th><th className="p-4">Product Head</th><th className="p-4">Product Name</th><th className="p-4">HSN/SAC Code</th><th className="p-4 text-center">UOM</th><th className="p-4 text-center">Status</th></tr>
+                    <thead className="bg-slate-100 border-b border-slate-200 text-slate-800 text-xs uppercase tracking-wider sticky top-0">
+                      <tr><th className="p-4">Item Name</th><th className="p-4 text-center">Total Qty Sold</th><th className="p-4 text-right">Aggregate Selling Price (Taxable)</th></tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 text-xs md:text-sm">
-                      {loadingGst ? (<tr><td colSpan={6} className="p-10 text-center font-medium">Scanning warehouse...</td></tr>) : gstProductData.length === 0 ? (<tr><td colSpan={6} className="p-10 text-center text-slate-400 italic">No products cataloged.</td></tr>) : (
-                        gstProductData.map((prod, idx) => (
-                          <tr key={prod.id} className="hover:bg-slate-50 transition-colors">
-                            <td className="p-4 text-center text-slate-400 font-medium">{idx + 1}</td><td className="p-4 font-bold text-slate-800">{prod.product_head || 'General'}</td><td className="p-4 font-medium text-slate-700">{prod.name}</td>
-                            <td className="p-4 text-slate-500 tracking-mono">{prod.hsn_code || 'N/A'}</td><td className="p-4 text-center">{prod.uom}</td>
-                            <td className="p-4 text-center"><span className={`px-2 py-1 rounded-full text-[10px] font-bold ${prod.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{prod.is_active ? 'ACTIVE' : 'INACTIVE'}</span></td>
+                      {loadingGst ? (<tr><td colSpan={3} className="p-10 text-center font-medium">Aggregating slab data...</td></tr>) : gstReportData.length === 0 ? (<tr><td colSpan={3} className="p-10 text-center text-slate-400 italic">No items sold under this slab in the selected date range.</td></tr>) : (
+                        gstReportData.map((row, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                            <td className="p-4 font-bold text-slate-800">{row.product_name}</td>
+                            <td className="p-4 text-center font-medium text-blue-600">{row.qty}</td>
+                            <td className="p-4 text-right font-bold text-emerald-600">₹{row.taxable_amount.toFixed(2)}</td>
                           </tr>
                         ))
                       )}
@@ -420,11 +456,11 @@ export default function DashboardAndReport() {
           {activeModule === "item_price" && (
             <div className="space-y-6 animate-in fade-in duration-200">
               <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 no-print">
-                <h3 className="font-semibold text-slate-800 mb-4 border-b pb-2 text-sm">Date Range Filter</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                <h3 className="font-semibold text-slate-800 mb-4 border-b pb-2 text-sm">Price Fluctuation Engine</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                   <div><label className="block text-xs font-medium text-slate-700 mb-1">From Date</label><input type="date" value={sharedDates.startDate} onChange={(e) => setSharedDates({...sharedDates, startDate: e.target.value})} className="w-full border border-slate-300 rounded-md p-2 text-sm outline-none" /></div>
                   <div><label className="block text-xs font-medium text-slate-700 mb-1">To Date</label><input type="date" value={sharedDates.endDate} onChange={(e) => setSharedDates({...sharedDates, endDate: e.target.value})} className="w-full border border-slate-300 rounded-md p-2 text-sm outline-none" /></div>
-                  <div className="flex justify-end"><button onClick={generateItemPriceReport} disabled={loadingItemPrice} className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-5 py-2 text-sm rounded-md transition-colors w-full md:w-auto shadow-sm">{loadingItemPrice ? "Scanning..." : "Fetch Pricing Logs"}</button></div>
+                  <div className="md:col-span-2 flex justify-end"><button onClick={generateItemPriceReport} disabled={loadingItemPrice} className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-5 py-2 text-sm rounded-md transition-colors w-full md:w-auto shadow-sm">{loadingItemPrice ? "Scanning Rates..." : "Fetch Pricing Logs"}</button></div>
                 </div>
               </div>
 
@@ -477,38 +513,58 @@ export default function DashboardAndReport() {
           {activeModule === "products" && (
             <div className="space-y-6 animate-in fade-in duration-200">
               <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 no-print">
-                <h3 className="font-semibold text-slate-800 mb-4 border-b pb-2 text-sm">Date Range Filter</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                <h3 className="font-semibold text-slate-800 mb-4 border-b pb-2 text-sm">Product Sales Tracker</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                   <div><label className="block text-xs font-medium text-slate-700 mb-1">From Date</label><input type="date" value={sharedDates.startDate} onChange={(e) => setSharedDates({...sharedDates, startDate: e.target.value})} className="w-full border border-slate-300 rounded-md p-2 text-sm outline-none" /></div>
                   <div><label className="block text-xs font-medium text-slate-700 mb-1">To Date</label><input type="date" value={sharedDates.endDate} onChange={(e) => setSharedDates({...sharedDates, endDate: e.target.value})} className="w-full border border-slate-300 rounded-md p-2 text-sm outline-none" /></div>
-                  <div className="flex justify-end"><button onClick={generateProductsReport} disabled={loadingProducts} className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-5 py-2 text-sm rounded-md transition-colors w-full md:w-auto shadow-sm">{loadingProducts ? "Extracting..." : "Generate Products Report"}</button></div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Select Product</label>
+                    <Select 
+                      options={productsList.map(p => ({ value: p.id, label: p.name }))} 
+                      value={productsList.map(p => ({ value: p.id, label: p.name })).find(o => o.value === selectedProduct)} 
+                      onChange={(option: any) => setSelectedProduct(option?.value)} 
+                      className="text-sm" 
+                    />
+                  </div>
+                  <div className="flex justify-end"><button onClick={generateProductsReport} disabled={loadingProducts} className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-5 py-2 text-sm rounded-md transition-colors w-full shadow-sm">{loadingProducts ? "Tracking..." : "Track Product Sales"}</button></div>
                 </div>
               </div>
 
               <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
                 <div className="p-4 border-b border-slate-200 bg-slate-50 flex flex-col md:flex-row justify-between items-center gap-4">
-                  <h3 className="font-semibold text-slate-800">Cumulative Product Sales <span className="text-xs font-normal text-slate-500 ml-2 block print:hidden">({sharedDates.startDate} to {sharedDates.endDate})</span></h3>
+                  <h3 className="font-semibold text-slate-800">Historical Sales Log <span className="text-xs font-normal text-slate-500 ml-2 block print:hidden">({sharedDates.startDate} to {sharedDates.endDate})</span></h3>
                   <div className="flex gap-2 no-print">
                     <button onClick={() => handleExport('products')} className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded text-xs font-bold uppercase transition-colors">📥 Excel</button>
                     <button onClick={() => window.print()} className="bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded text-xs font-bold uppercase transition-colors">🖨️ PDF / Print</button>
                   </div>
                 </div>
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
                   <table className="w-full text-left text-sm text-slate-600 whitespace-nowrap">
-                    <thead className="bg-slate-100 border-b border-slate-200 text-slate-800 text-xs uppercase tracking-wider">
-                      <tr><th className="p-4">Bill No.</th><th className="p-4">Customer</th><th className="p-4">Product Name</th><th className="p-4 text-center">Qty Sold (Cumulative)</th><th className="p-4 text-right">Single Rate</th></tr>
+                    <thead className="bg-slate-100 border-b border-slate-200 text-slate-800 text-xs uppercase tracking-wider sticky top-0">
+                      <tr><th className="p-4">Date</th><th className="p-4">Bill No.</th><th className="p-4">Product Name</th><th className="p-4 text-center">Qty Sold</th><th className="p-4 text-right">Selling Rate</th></tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 text-xs md:text-sm">
-                      {loadingProducts ? (<tr><td colSpan={5} className="p-10 text-center font-medium">Aggregating line items...</td></tr>) : productsReportData.length === 0 ? (<tr><td colSpan={5} className="p-10 text-center text-slate-400 italic">No sales found in this period.</td></tr>) : (
+                      {loadingProducts ? (<tr><td colSpan={5} className="p-10 text-center font-medium">Scanning invoices...</td></tr>) : productsReportData.length === 0 ? (<tr><td colSpan={5} className="p-10 text-center text-slate-400 italic">This product has not been sold within the selected period.</td></tr>) : (
                         productsReportData.map((row, idx) => (
                           <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                            <td className="p-4 font-bold text-slate-800">{row.bill_no}</td><td className="p-4 font-medium text-slate-700 whitespace-normal">{row.customer_name}</td>
-                            <td className="p-4">{row.product_name}</td><td className="p-4 text-center font-bold text-blue-600">{row.qty}</td>
+                            <td className="p-4">{new Date(row.bill_date).toLocaleDateString('en-IN')}</td>
+                            <td className="p-4 font-bold text-slate-800">{row.bill_no}</td>
+                            <td className="p-4">{row.product_name}</td>
+                            <td className="p-4 text-center font-bold text-blue-600">{row.qty}</td>
                             <td className="p-4 text-right font-medium">₹{row.rate.toFixed(2)}</td>
                           </tr>
                         ))
                       )}
                     </tbody>
+                    {productsReportData.length > 0 && (
+                      <tfoot className="bg-slate-800 text-white sticky bottom-0">
+                        <tr>
+                          <td colSpan={3} className="p-4 text-right font-bold uppercase tracking-wider text-xs">Aggregate Product Summary:</td>
+                          <td className="p-4 text-center font-extrabold text-base text-emerald-400">{productsReportData.reduce((sum, r) => sum + r.qty, 0)}</td>
+                          <td className="p-4 text-right font-extrabold text-base text-emerald-400">₹{productsReportData.reduce((sum, r) => sum + r.taxable_amount, 0).toFixed(2)}</td>
+                        </tr>
+                      </tfoot>
+                    )}
                   </table>
                 </div>
               </div>
