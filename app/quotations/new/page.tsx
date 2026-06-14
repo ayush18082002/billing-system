@@ -29,8 +29,8 @@ export default function CreateBill() {
     vehicleNumber: "",
     grNumber: "",
     grDate: "",
-    dateOfSupply: "", // NEW
-    reverseCharge: false, // NEW
+    dateOfSupply: "", 
+    reverseCharge: false, 
     isConsigneeDifferent: false,
     consigneeName: "",
     consigneeAddress: "",
@@ -67,10 +67,26 @@ export default function CreateBill() {
     if (statesData) setStates(statesData);
   };
 
-  const generateBillNumber = () => {
-    const year = new Date().getFullYear();
-    const randomSeq = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-    setHeader(prev => ({ ...prev, qtNo: `Bill-${year}-${randomSeq}` }));
+  const generateBillNumber = async () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const prefix = `Bill-${year}-${month}-`;
+
+    const { data, error } = await supabase
+      .from('quotations')
+      .select('bill_no')
+      .ilike('bill_no', `${prefix}%`) 
+      .order('bill_no', { ascending: false })
+      .limit(1);
+
+    if (data && data.length > 0 && data[0].bill_no) {
+      const lastSequence = parseInt(data[0].bill_no.split('-').pop(), 10);
+      const nextSequence = String(lastSequence + 1).padStart(3, '0');
+      setHeader(prev => ({ ...prev, qtNo: `${prefix}${nextSequence}` }));
+    } else {
+      setHeader(prev => ({ ...prev, qtNo: `${prefix}001` }));
+    }
   };
 
   const addRow = () => {
@@ -192,13 +208,13 @@ export default function CreateBill() {
         bill_date: header.qtDate, 
         customer_id: header.customerId,
         mode_of_transport: dispatch.modeOfTransport,
-        po_number: dispatch.poNumber,
+        po_no: dispatch.poNumber || null,
         po_date: dispatch.poDate || null, 
         vehicle_number: dispatch.vehicleNumber,
-        gr_number: dispatch.grNumber,
+        gr_no: dispatch.grNumber || null,
         gr_date: dispatch.grDate || null, 
-        date_of_supply: dispatch.dateOfSupply || null, // NEW
-        reverse_charge: dispatch.reverseCharge, // NEW
+        date_of_supply: dispatch.dateOfSupply || null, 
+        reverse_charge: dispatch.reverseCharge, 
         is_consignee_different: dispatch.isConsigneeDifferent,
         consignee_name: dispatch.isConsigneeDifferent ? dispatch.consigneeName : null,
         consignee_address: dispatch.isConsigneeDifferent ? dispatch.consigneeAddress : null,
@@ -259,7 +275,7 @@ export default function CreateBill() {
   }));
 
   return (
-    <div className="flex flex-col gap-6 relative max-w-[1400px] mx-auto">
+    <div className="flex flex-col gap-6 relative max-w-[1400px] mx-auto p-4 md:p-8">
       
       {/* 1. HEADER SECTION */}
       <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
@@ -338,7 +354,6 @@ export default function CreateBill() {
             <input type="date" value={dispatch.grDate} onChange={(e) => setDispatch({...dispatch, grDate: e.target.value})} className="w-full border border-slate-300 rounded-md p-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           
-          {/* NEW: Date of Supply Field */}
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1">Date of Supply (Optional)</label>
             <input type="date" value={dispatch.dateOfSupply} onChange={(e) => setDispatch({...dispatch, dateOfSupply: e.target.value})} className="w-full border border-slate-300 rounded-md p-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
@@ -359,7 +374,6 @@ export default function CreateBill() {
             </label>
           </div>
 
-          {/* NEW: Reverse Charge Toggle */}
           <div className="flex items-center gap-2">
             <input 
               type="checkbox" 
@@ -638,7 +652,6 @@ export default function CreateBill() {
             </div>
           </div>
 
-          {/* NEW: Cancel Button Added Next to Save */}
           <div className="flex gap-4 mt-6">
             <button 
               type="button"

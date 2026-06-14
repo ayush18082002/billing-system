@@ -241,7 +241,7 @@ export default function QuotationPrintView() {
                 {/* ========================================= */}
                 {isFirstPage && (
                   <>
-                    {/* COMPANY HEADER (Shrunk Enterprise 30%, Padding Tightened) */}
+                    {/* COMPANY HEADER */}
                     <div className="flex border-b-[2px] border-black shrink-0">
                       <div className="w-1/2 p-1 border-r-[2px] border-black">
                         <h2 className="text-[12px] font-bold uppercase leading-none">YOUR ENTERPRISE NAME</h2>
@@ -259,7 +259,7 @@ export default function QuotationPrintView() {
                       </div>
                     </div>
 
-                    {/* INVOICE DETAILS w/ PO & GR (Padding Tightened) */}
+                    {/* INVOICE DETAILS w/ PO, GR, Transport */}
                     <div className="grid grid-cols-2 md:grid-cols-4 border-b-[2px] border-black divide-x-[2px] divide-black bg-slate-50 shrink-0">
                       <div className="p-1">
                         <p className="text-[8px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Invoice / Bill No.</p>
@@ -284,12 +284,17 @@ export default function QuotationPrintView() {
                         <p className="font-semibold text-[10px] leading-none">{placeOfSupply}</p>
                       </div>
                       <div className="p-1">
-                        <p className="text-[8px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Vehicle Number</p>
-                        <p className="font-semibold text-[10px] leading-none">{quotation.vehicle_number || 'N/A'}</p>
+                        <p className="text-[8px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Logistics Info</p>
+                        <div className="mt-1 text-[8px] leading-none">
+                            <span className="font-bold">Vehicle:</span> {quotation.vehicle_number || 'N/A'}
+                        </div>
+                        <div className="mt-0.5 text-[8px] leading-none">
+                            <span className="font-bold">Mode:</span> {quotation.mode_of_transport || 'N/A'}
+                        </div>
                       </div>
                     </div>
 
-                    {/* PARTIES (Padding Tightened) */}
+                    {/* PARTIES */}
                     <div className="flex border-b-[2px] border-black shrink-0">
                       <div className="w-1/2 p-1 border-r-[2px] border-black">
                         <p className="text-[9px] font-bold italic mb-0.5 underline">Details of Receiver (Billed to)</p>
@@ -362,33 +367,33 @@ export default function QuotationPrintView() {
                         const lineItemTotal = Number(item.taxable_amount) + taxForThisItem;
 
                         return (
-                          <tr key={item.id} className="divide-x-[2px] divide-black">
-                            <td className="px-1 py-[2px] text-center font-medium align-middle">{serialOffset + index + 1}</td>
-                            <td className="px-1 py-[2px] align-middle">
+                          <tr key={item.id} className="divide-x-[2px] divide-black align-top">
+                            <td className="px-1 py-[2px] text-center font-medium align-top">{serialOffset + index + 1}</td>
+                            <td className="px-1 py-[2px] align-top">
                               <span className="font-bold text-[11px] leading-tight">{item.products?.name}</span>
                               {Number(item.discount_percent) > 0 && <span className="block text-[8px] text-gray-500 italic mt-[1px]">Disc: {item.discount_percent}%</span>}
                             </td>
-                            <td className="px-1 py-[2px] text-center align-middle">{item.products?.hsn_code || '-'}</td>
-                            <td className="px-1 py-[2px] text-center font-bold align-middle">{item.qty} <span className="text-[8px] font-normal">{item.products?.uom}</span></td>
-                            <td className="px-1 py-[2px] text-right align-middle leading-tight">₹{Number(item.rate).toFixed(2)}</td>
-                            <td className="px-1 py-[2px] text-right font-bold text-gray-800 align-middle leading-tight">₹{Number(item.taxable_amount).toFixed(2)}</td>
+                            <td className="px-1 py-[2px] text-center align-top">{item.products?.hsn_code || '-'}</td>
+                            <td className="px-1 py-[2px] text-center font-bold align-top">{item.qty} <span className="text-[8px] font-normal">{item.products?.uom}</span></td>
+                            <td className="px-1 py-[2px] text-right align-top leading-tight">₹{Number(item.rate).toFixed(2)}</td>
+                            <td className="px-1 py-[2px] text-right font-bold text-gray-800 align-top leading-tight">₹{Number(item.taxable_amount).toFixed(2)}</td>
                             
                             {isLocal ? (
                               <>
-                                <td className="px-1 py-[2px] text-right align-middle leading-tight">
+                                <td className="px-1 py-[2px] text-right align-top leading-tight">
                                   ₹{Number(item.cgst_amount).toFixed(2)} <span className="block text-[7px] text-gray-500 leading-none mt-0.5">({item.gst_percent / 2}%)</span>
                                 </td>
-                                <td className="px-1 py-[2px] text-right align-middle leading-tight">
+                                <td className="px-1 py-[2px] text-right align-top leading-tight">
                                   ₹{Number(item.sgst_amount).toFixed(2)} <span className="block text-[7px] text-gray-500 leading-none mt-0.5">({item.gst_percent / 2}%)</span>
                                 </td>
                               </>
                             ) : (
-                              <td className="px-1 py-[2px] text-right align-middle leading-tight">
+                              <td className="px-1 py-[2px] text-right align-top leading-tight">
                                 ₹{Number(item.igst_amount).toFixed(2)} <span className="block text-[7px] text-gray-500 leading-none mt-0.5">({item.gst_percent}%)</span>
                               </td>
                             )}
 
-                            <td className="px-1 py-[2px] text-right font-extrabold bg-slate-50 text-black align-middle leading-tight">
+                            <td className="px-1 py-[2px] text-right font-extrabold bg-slate-50 text-black align-top leading-tight">
                               ₹{lineItemTotal.toFixed(2)}
                             </td>
                           </tr>
@@ -404,7 +409,7 @@ export default function QuotationPrintView() {
                 {isLastPage && (
                   <div className="shrink-0 flex flex-col border-t-[2px] border-black bg-white">
                     
-                    {/* TOTALS & BANK DETAILS (Padding and Text Sizing Aggressively Reduced) */}
+                    {/* TOTALS & BANK DETAILS */}
                     <div className="flex border-b-[2px] border-black">
                       <div className="w-[55%] p-1.5 border-r-[2px] border-black flex flex-col justify-start">
                         <p className="text-[9px] font-bold italic underline mb-1">Bank Details:</p>
