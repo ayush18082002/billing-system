@@ -264,14 +264,15 @@ export default function QuotationPrintView() {
                       <div className="p-1">
                         <p className="text-[8px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Invoice / Bill No.</p>
                         <p className="font-bold text-[10px] leading-none">{quotation.bill_no}</p>
-                        {(quotation.po_no || quotation.po_date) && (
+                        
+                        {(quotation.po_number || quotation.po_date) && (
                           <div className="mt-1 text-[8px] leading-none">
-                            <span className="font-bold">PO No:</span> {quotation.po_no || 'N/A'} {quotation.po_date && `| ${new Date(quotation.po_date).toLocaleDateString('en-IN')}`}
+                            <span className="font-bold">PO No:</span> {quotation.po_number || 'N/A'} {quotation.po_date && `| ${new Date(quotation.po_date).toLocaleDateString('en-IN')}`}
                           </div>
                         )}
-                        {(quotation.gr_no || quotation.gr_date) && (
+                        {(quotation.gr_number || quotation.gr_date) && (
                           <div className="mt-0.5 text-[8px] leading-none">
-                            <span className="font-bold">GR No:</span> {quotation.gr_no || 'N/A'} {quotation.gr_date && `| ${new Date(quotation.gr_date).toLocaleDateString('en-IN')}`}
+                            <span className="font-bold">GR No:</span> {quotation.gr_number || 'N/A'} {quotation.gr_date && `| ${new Date(quotation.gr_date).toLocaleDateString('en-IN')}`}
                           </div>
                         )}
                       </div>
