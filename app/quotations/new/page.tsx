@@ -12,14 +12,14 @@ export default function CreateBill() {
   const [products, setProducts] = useState<any[]>([]);
   const [states, setStates] = useState<any[]>([]); 
   
-  // NOTE: Replace this with your actual Home State UUID from state_master
-  const COMPANY_STATE_ID = "bb6a33c1-9649-4f1e-a51b-5eb7f6b0fc8f"; 
+  // SLE MECHTRONICS LLP is based in Delhi (State Code 07)
+  const HOME_STATE_CODE = "07"; 
 
   const [header, setHeader] = useState({
     qtNo: "",
     qtDate: new Date().toISOString().split('T')[0], 
     customerId: null as string | null,
-    customerStateId: null as string | null,
+    customerStateCode: null as string | null,
   });
 
   const [dispatch, setDispatch] = useState({
@@ -35,7 +35,8 @@ export default function CreateBill() {
     consigneeName: "",
     consigneeAddress: "",
     consigneeGst: "",
-    consigneeState: "", 
+    consigneeStateId: "", 
+    consigneeStateCode: "",
   });
 
   const [rows, setRows] = useState([
@@ -117,11 +118,13 @@ export default function CreateBill() {
     }));
   };
 
-  const activeStateId = dispatch.isConsigneeDifferent && dispatch.consigneeState 
-    ? dispatch.consigneeState 
-    : header.customerStateId;
+  // Tax Engine Logic based on Delhi (07)
+  const activeStateCode = dispatch.isConsigneeDifferent && dispatch.consigneeStateCode 
+    ? dispatch.consigneeStateCode 
+    : header.customerStateCode;
 
-  const isLocal = activeStateId === COMPANY_STATE_ID;
+  // Check if the shipping state matches Delhi's code (07)
+  const isLocal = activeStateCode === HOME_STATE_CODE || activeStateCode === "7";
 
   const processedRows = rows.map(row => {
     const baseValue = (row.qty || 0) * (row.rate || 0);
@@ -219,7 +222,7 @@ export default function CreateBill() {
         consignee_name: dispatch.isConsigneeDifferent ? dispatch.consigneeName : null,
         consignee_address: dispatch.isConsigneeDifferent ? dispatch.consigneeAddress : null,
         consignee_gstin: dispatch.isConsigneeDifferent ? dispatch.consigneeGst : null,
-        consignee_state: dispatch.isConsigneeDifferent ? dispatch.consigneeState : null,
+        consignee_state: dispatch.isConsigneeDifferent ? dispatch.consigneeStateId : null,
         subtotal: totals.subtotalTaxable,
         cgst: totals.finalCgst,
         sgst: totals.finalSgst,
@@ -266,8 +269,8 @@ export default function CreateBill() {
     router.push(`/quotations`);
   };
 
-  const customerOptions = customers.map(c => ({ value: c.id, label: `${c.business_name} (${c.gstin || 'No GSTIN'})`, stateId: c.state }));
-  const stateOptions = states.map(s => ({ value: s.id, label: s.state_name }));
+  const customerOptions = customers.map(c => ({ value: c.id, label: `${c.business_name} (${c.gstin || 'No GSTIN'})`, stateCode: c.state_code }));
+  const stateOptions = states.map(s => ({ value: s.id, label: s.state_name, code: s.state_code || s.code }));
   
   const productOptions = products.map(p => ({ 
     value: p.id, 
@@ -295,7 +298,7 @@ export default function CreateBill() {
               options={customerOptions}
               value={customerOptions.find(c => c.value === header.customerId) || null}
               placeholder="Search active customers..."
-              onChange={(option: any) => setHeader({ ...header, customerId: option?.value, customerStateId: option?.stateId })}
+              onChange={(option: any) => setHeader({ ...header, customerId: option?.value, customerStateCode: option?.stateCode })}
               isClearable
             />
             {header.customerId && (
@@ -407,9 +410,9 @@ export default function CreateBill() {
               <Select 
                 instanceId="state-select"
                 options={stateOptions}
-                value={stateOptions.find(s => s.value === dispatch.consigneeState) || null}
+                value={stateOptions.find(s => s.value === dispatch.consigneeStateId) || null}
                 placeholder="Search State..."
-                onChange={(option: any) => setDispatch({...dispatch, consigneeState: option?.value || ""})}
+                onChange={(option: any) => setDispatch({...dispatch, consigneeStateId: option?.value || "", consigneeStateCode: option?.code || ""})}
                 isClearable
                 menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
                 menuPosition="fixed"

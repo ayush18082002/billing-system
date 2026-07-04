@@ -228,6 +228,7 @@ export default function DashboardAndReport() {
     XLSX.writeFile(wb, `GSTR1_B2B_${sharedDates.startDate}.xlsx`);
   };
 
+  // E-Way bill logic preserved safely here for future use
   const handleExportEWayBillOffline = () => {
     const ewayEligibleData = customerSalesData.filter(row => row.taxable_amount >= 50000);
     if (ewayEligibleData.length === 0) return alert("No transactions cross the statutory threshold baseline value (₹50,000).");
@@ -237,32 +238,14 @@ export default function DashboardAndReport() {
       const formattedDate = `${String(invoiceDate.getDate()).padStart(2, '0')}/${String(invoiceDate.getMonth() + 1).padStart(2, '0')}/${invoiceDate.getFullYear()}`;
       
       return {
-        "Supply Type": "O", 
-        "Sub Supply Type": "1", 
-        "Document Type": "INV", 
-        "Document No": row.bill_no, 
-        "Document Date": formattedDate,
-        "Transaction Type": "1", 
-        "To_OtherPartyName": row.customer_name, 
-        "To_GSTIN": row.customer_gstin,
-        "To_State": row.place_of_supply.split('-')[0], 
-        "Dispatch_State": "07", 
-        "Product_Name": row.product_name, 
-        "Description": row.product_head, 
-        "HSN": row.hsn_code, 
-        "Unit": "NOS", 
-        "Qty": row.qty,
-        "Assessable Value": Number(row.taxable_amount.toFixed(2)), 
-        "Tax Rate (CGST+SGST/IGST)": Number(row.gst_percent),
+        "Supply Type": "O", "Sub Supply Type": "1", "Document Type": "INV", "Document No": row.bill_no, "Document Date": formattedDate,
+        "Transaction Type": "1", "To_OtherPartyName": row.customer_name, "To_GSTIN": row.customer_gstin,
+        "To_State": row.place_of_supply.split('-')[0], "Dispatch_State": "07", 
+        "Product_Name": row.product_name, "Description": row.product_head, "HSN": row.hsn_code, "Unit": "NOS", "Qty": row.qty,
+        "Assessable Value": Number(row.taxable_amount.toFixed(2)), "Tax Rate (CGST+SGST/IGST)": Number(row.gst_percent),
         "CGST Amount": Number((row.taxable_amount * (Number(row.gst_percent)/200)).toFixed(2)),
         "SGST Amount": Number((row.taxable_amount * (Number(row.gst_percent)/200)).toFixed(2)),
-        "IGST Amount": 0, 
-        "CESS Amount": 0, 
-        "Transporter ID": "", 
-        "Transporter Name": "", 
-        "Transporter Doc No": "", 
-        "Transporter Date": "", 
-        "Vehicle No": ""
+        "IGST Amount": 0, "CESS Amount": 0, "Transporter ID": "", "Transporter Name": "", "Transporter Doc No": "", "Transporter Date": "", "Vehicle No": ""
       };
     });
 
@@ -306,7 +289,10 @@ export default function DashboardAndReport() {
             <button onClick={() => setActiveModule("customer")} className={`py-2 px-6 font-medium text-sm transition-colors border-b-2 ${activeModule === "customer" ? "border-blue-600 text-blue-600 bg-blue-50/50 rounded-t-md font-semibold" : "border-transparent text-slate-500 hover:text-slate-700"}`}>🏢 Customer Ledger</button>
             <button onClick={() => setActiveModule("gst_report")} className={`py-2 px-6 font-medium text-sm transition-colors border-b-2 ${activeModule === "gst_report" ? "border-blue-600 text-blue-600 bg-blue-50/50 rounded-t-md font-semibold" : "border-transparent text-slate-500 hover:text-slate-700"}`}>📊 % GST Tracker</button>
             <button onClick={() => setActiveModule("gstr1")} className={`py-2 px-6 font-medium text-sm transition-colors border-b-2 ${activeModule === "gstr1" ? "border-blue-600 text-blue-600 bg-blue-50/50 rounded-t-md font-semibold" : "border-transparent text-slate-500 hover:text-slate-700"}`}>📑 GSTR-1 Govt Form</button>
-            <button onClick={() => setActiveModule("eway_bill")} className={`py-2 px-6 font-medium text-sm transition-colors border-b-2 ${activeModule === "eway_bill" ? "border-blue-600 text-blue-600 bg-blue-50/50 rounded-t-md font-semibold" : "border-transparent text-slate-500 hover:text-slate-700"}`}>🚚 E-Way Bill</button>
+            
+            {/* E-WAY BILL BUTTON DISABLED SAFELY */}
+            {/* <button onClick={() => setActiveModule("eway_bill")} className={`py-2 px-6 font-medium text-sm transition-colors border-b-2 ${activeModule === "eway_bill" ? "border-blue-600 text-blue-600 bg-blue-50/50 rounded-t-md font-semibold" : "border-transparent text-slate-500 hover:text-slate-700"}`}>🚚 E-Way Bill</button> */}
+            
             <button onClick={() => setActiveModule("item_price")} className={`py-2 px-6 font-medium text-sm transition-colors border-b-2 ${activeModule === "item_price" ? "border-blue-600 text-blue-600 bg-blue-50/50 rounded-t-md font-semibold" : "border-transparent text-slate-500 hover:text-slate-700"}`}>📈 Item Price</button>
             <button onClick={() => setActiveModule("products")} className={`py-2 px-6 font-medium text-sm transition-colors border-b-2 ${activeModule === "products" ? "border-blue-600 text-blue-600 bg-blue-50/50 rounded-t-md font-semibold" : "border-transparent text-slate-500 hover:text-slate-700"}`}>📦 Products</button>
           </div>
@@ -479,9 +465,9 @@ export default function DashboardAndReport() {
           )}
 
           {/* ========================================================= */}
-          {/* WORKSPACE 4: E-WAY BILL UTILITY MODULE */}
+          {/* WORKSPACE 4: E-WAY BILL UTILITY MODULE (TEMPORARILY DISABLED) */}
           {/* ========================================================= */}
-          {activeModule === "eway_bill" && (
+          {/* activeModule === "eway_bill" && (
             <div className="space-y-6 animate-in fade-in duration-200">
               <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 no-print">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b pb-4 mb-4 gap-4">
@@ -537,7 +523,7 @@ export default function DashboardAndReport() {
                 </div>
               </div>
             </div>
-          )}
+          ) */}
 
           {/* ========================================================= */}
           {/* WORKSPACE 5: ITEM PRICE MODULE */}

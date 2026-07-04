@@ -40,6 +40,7 @@ export default function QuotationPrintView() {
   const [states, setStates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Home State UUID mapped to Delhi (07)
   const COMPANY_STATE_ID = "bb6a33c1-9649-4f1e-a51b-5eb7f6b0fc8f"; 
 
   useEffect(() => {
@@ -93,7 +94,7 @@ export default function QuotationPrintView() {
 
   const customerState = getStateDetails(customer.state);
   const consigneeState = quotation.consignee_state ? getStateDetails(quotation.consignee_state) : null;
-  const companyState = getStateDetails(COMPANY_STATE_ID);
+  const companyState = { state_name: 'Delhi', code: '07' };
 
   const placeOfSupply = quotation.is_consignee_different && consigneeState 
     ? consigneeState.state_name 
@@ -225,7 +226,7 @@ export default function QuotationPrintView() {
           return (
             <div key={pageIndex} className="a4-container flex flex-col mb-8 print:mb-0">
               
-              {/* HEADER AREA (Shrunk 50%) */}
+              {/* HEADER AREA */}
               <div className="text-center mb-1 shrink-0">
                 <h1 className="text-[10px] font-bold uppercase tracking-wider text-black leading-none">
                   TAX Invoice {pageIndex > 0 && <span className="text-[8px] font-medium italic text-gray-500">(Continued)</span>}
@@ -243,27 +244,27 @@ export default function QuotationPrintView() {
                   <>
                     {/* COMPANY HEADER */}
                     <div className="flex border-b-[2px] border-black shrink-0">
-                      <div className="w-1/2 p-1 border-r-[2px] border-black">
-                        <h2 className="text-[12px] font-bold uppercase leading-none">YOUR ENTERPRISE NAME</h2>
-                        <p className="font-medium text-[9px] mt-1">Manufacturers of Industrial Equipment</p>
-                        <p className="text-[9px] leading-tight mt-0.5">123 Business Tech Park, Sector 45, New Delhi, India 110001</p>
-                        <p className="text-[9px] leading-tight mt-0.5">Mobile: +91 98765 43210 | Email: billing@yourenterprise.com</p>
+                      <div className="w-3/5 p-1.5 border-r-[2px] border-black">
+                        <h2 className="text-[14px] font-extrabold uppercase leading-tight text-blue-900">SLE MECHTRONICS LLP</h2>
+                        <p className="text-[9px] leading-tight mt-1 font-medium">KH NO. 110/22, MUNDKA INDUSTRIAL AREA,</p>
+                        <p className="text-[9px] leading-tight">MUNDKA, NEW DELHI-110041</p>
+                        <p className="text-[9px] leading-tight mt-1">Mob: +91-9873947619, +91-9811258459</p>
+                        <p className="text-[9px] leading-tight">Email: sigmadelhi@yahoo.com</p>
                       </div>
-                      <div className="w-1/2 p-1 flex flex-col justify-center">
-                        <div className="grid grid-cols-[60px_1fr] gap-x-1 gap-y-0.5 text-[9px]">
-                          <span className="font-bold">GSTIN/UIN</span><span className="uppercase">: 07AAACA1234A1Z5</span>
-                          <span className="font-bold">PAN</span><span className="uppercase">: AAACA1234A</span>
-                          <span className="font-bold">IEC No.</span><span className="uppercase">: 0123456789</span>
+                      <div className="w-2/5 p-1.5 flex flex-col justify-center bg-slate-50">
+                        <div className="grid grid-cols-[60px_1fr] gap-x-1 gap-y-1 text-[9px]">
+                          <span className="font-bold">GSTIN/UIN</span><span className="uppercase font-bold text-slate-800">: 07AFXFS1758M1ZZ</span>
+                          <span className="font-bold">PAN</span><span className="uppercase">: AFXFS1758M</span>
                           <span className="font-bold">State Code</span><span className="uppercase">: {companyState.code}</span>
                         </div>
                       </div>
                     </div>
 
                     {/* INVOICE DETAILS w/ PO, GR, Transport */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 border-b-[2px] border-black divide-x-[2px] divide-black bg-slate-50 shrink-0">
+                    <div className="grid grid-cols-2 md:grid-cols-4 border-b-[2px] border-black divide-x-[2px] divide-black shrink-0">
                       <div className="p-1">
                         <p className="text-[8px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Invoice / Bill No.</p>
-                        <p className="font-bold text-[10px] leading-none">{quotation.bill_no}</p>
+                        <p className="font-bold text-[10px] leading-none text-blue-900">{quotation.bill_no}</p>
                         
                         {(quotation.po_number || quotation.po_date) && (
                           <div className="mt-1 text-[8px] leading-none">
@@ -297,27 +298,27 @@ export default function QuotationPrintView() {
 
                     {/* PARTIES */}
                     <div className="flex border-b-[2px] border-black shrink-0">
-                      <div className="w-1/2 p-1 border-r-[2px] border-black">
+                      <div className="w-1/2 p-1.5 border-r-[2px] border-black">
                         <p className="text-[9px] font-bold italic mb-0.5 underline">Details of Receiver (Billed to)</p>
-                        <h3 className="font-bold uppercase text-[10px]">{customer.business_name}</h3>
+                        <h3 className="font-bold uppercase text-[10px] text-blue-900">{customer.business_name}</h3>
                         <p className="whitespace-pre-line text-[9px] mt-0.5 leading-tight">{customer.billing_address}</p>
                         {customer.phone && <p className="text-[9px] mt-0.5 leading-tight">Phone: {customer.phone}</p>}
-                        <div className="mt-1 grid grid-cols-[60px_1fr] gap-y-0.5 text-[9px]">
+                        <div className="mt-1.5 grid grid-cols-[60px_1fr] gap-y-0.5 text-[9px]">
                           <span className="font-bold">State</span><span>: {customerState.state_name}</span>
                           <span className="font-bold">State Code</span><span>: {customerState.code}</span>
-                          <span className="font-bold">GSTIN</span><span className="uppercase">: {customer.gstin || 'Unregistered'}</span>
+                          <span className="font-bold">GSTIN</span><span className="uppercase font-bold">: {customer.gstin || 'Unregistered'}</span>
                         </div>
                       </div>
-                      <div className="w-1/2 p-1">
+                      <div className="w-1/2 p-1.5">
                         <p className="text-[9px] font-bold italic mb-0.5 underline">Details of Consignee (Shipped to)</p>
                         {quotation.is_consignee_different ? (
                           <>
-                            <h3 className="font-bold uppercase text-[10px]">{quotation.consignee_name}</h3>
+                            <h3 className="font-bold uppercase text-[10px] text-blue-900">{quotation.consignee_name}</h3>
                             <p className="whitespace-pre-line text-[9px] mt-0.5 leading-tight">{quotation.consignee_address}</p>
-                            <div className="mt-1 grid grid-cols-[60px_1fr] gap-y-0.5 text-[9px]">
+                            <div className="mt-1.5 grid grid-cols-[60px_1fr] gap-y-0.5 text-[9px]">
                               <span className="font-bold">State</span><span>: {consigneeState?.state_name}</span>
                               <span className="font-bold">State Code</span><span>: {consigneeState?.code}</span>
-                              <span className="font-bold">GSTIN</span><span className="uppercase">: {quotation.consignee_gstin || 'Unregistered'}</span>
+                              <span className="font-bold">GSTIN</span><span className="uppercase font-bold">: {quotation.consignee_gstin || 'Unregistered'}</span>
                             </div>
                           </>
                         ) : (
@@ -413,12 +414,13 @@ export default function QuotationPrintView() {
                     {/* TOTALS & BANK DETAILS */}
                     <div className="flex border-b-[2px] border-black">
                       <div className="w-[55%] p-1.5 border-r-[2px] border-black flex flex-col justify-start">
-                        <p className="text-[9px] font-bold italic underline mb-1">Bank Details:</p>
-                        <div className="grid grid-cols-[65px_1fr] gap-y-0.5 text-[8px]">
-                          <span className="font-bold">Bank Name</span><span>: HDFC Bank Ltd.</span>
-                          <span className="font-bold">A/C Name</span><span>: YOUR ENTERPRISE NAME</span>
-                          <span className="font-bold">A/C Number</span><span>: 50200012345678</span>
-                          <span className="font-bold">IFSC Code</span><span>: HDFC0001234</span>
+                        <p className="text-[10px] font-bold italic underline mb-1">Bank Details:</p>
+                        <div className="grid grid-cols-[65px_1fr] gap-y-1 text-[9px]">
+                          <span className="font-bold">Bank Name</span><span className="font-bold uppercase">: KOTAK MAHINDRA BANK</span>
+                          <span className="font-bold">Branch</span><span className="uppercase">: Saraswati Vihar, Delhi - 110034</span>
+                          <span className="font-bold">A/C Name</span><span className="font-bold uppercase">: SLE MECHTRONICS LLP</span>
+                          <span className="font-bold">A/C Number</span><span className="font-bold">: 9811258459</span>
+                          <span className="font-bold">IFSC Code</span><span className="font-bold">: KKBK0004604</span>
                         </div>
                       </div>
 
@@ -433,40 +435,42 @@ export default function QuotationPrintView() {
                           <tbody className="divide-y-[1px] divide-black text-[8px]">
                             <tr><td className="py-0.5 px-1 font-bold">Total Taxable</td><td className="py-0.5 px-1 text-right font-bold border-l-[2px] border-black">₹{totalTaxableValue.toFixed(2)}</td></tr>
                             {isLocal ? (<><tr><td className="py-0.5 px-1 font-bold text-gray-700">Total CGST</td><td className="py-0.5 px-1 text-right border-l-[2px] border-black">₹{Number(quotation.cgst).toFixed(2)}</td></tr><tr><td className="py-0.5 px-1 font-bold text-gray-700">Total SGST</td><td className="py-0.5 px-1 text-right border-l-[2px] border-black">₹{Number(quotation.sgst).toFixed(2)}</td></tr></>) : (<tr><td className="py-0.5 px-1 font-bold text-gray-700">Total IGST</td><td className="py-0.5 px-1 text-right border-l-[2px] border-black">₹{Number(quotation.igst).toFixed(2)}</td></tr>)}
-                            <tr className="bg-slate-200"><td className="py-1 px-1 text-[10px] font-black uppercase tracking-wide">Grand Total</td><td className="py-1 px-1 text-right text-[10px] font-black border-l-[2px] border-black">₹{Number(quotation.grand_total).toFixed(2)}</td></tr>
+                            <tr className="bg-slate-200"><td className="py-1 px-1 text-[11px] font-black uppercase tracking-wide text-blue-900">Grand Total</td><td className="py-1 px-1 text-right text-[11px] font-black border-l-[2px] border-black text-blue-900">₹{Number(quotation.grand_total).toFixed(2)}</td></tr>
                           </tbody>
                         </table>
                       </div>
                     </div>
 
                     {/* WORDS AND EXTRA DETAILS */}
-                    <div className="border-b-[2px] border-black p-1 bg-slate-50 text-[9px]">
-                      <span className="font-bold">Invoice Value (In Words): </span><span className="italic font-medium">{numberToWords(quotation.grand_total)}</span>
+                    <div className="border-b-[2px] border-black p-1.5 bg-slate-50 text-[9px]">
+                      <span className="font-bold">Invoice Value (In Words): </span><span className="italic font-bold">{numberToWords(quotation.grand_total)}</span>
                     </div>
 
-                    <div className="border-b-[2px] border-black p-1 text-[9px]">
+                    <div className="border-b-[2px] border-black p-1.5 text-[9px]">
                       <span className="font-bold">Tax is payable on reverse charge (Yes/No): </span><span>{quotation.reverse_charge ? 'Yes' : 'No'}</span>
                     </div>
 
-                    <div className="border-b-[2px] border-black p-1 text-center text-[9px] font-bold tracking-wide">
+                    <div className="border-b-[2px] border-black p-1 text-center text-[10px] font-bold tracking-wide italic">
                       Certified that the particulars given above are true and correct.
                     </div>
 
                     {/* TERMS AND SIGNATURE */}
                     <div className="flex">
                       <div className="w-[60%] p-1.5 border-r-[2px] border-black">
-                        <p className="text-[9px] font-bold italic underline mb-0.5">Terms & Conditions:</p>
-                        <ul className="text-[8px] list-decimal list-inside space-y-[1px] font-medium text-gray-800 leading-tight">
-                          <li>Goods once sold will not be taken back or exchanged.</li>
-                          <li>Interest @ 18% p.a. will be charged if payment is delayed beyond 15 days.</li>
-                          <li>Our responsibility ceases the moment goods leave our premises.</li>
-                          <li>Subject to Delhi jurisdiction only.</li>
+                        <p className="text-[9px] font-bold italic underline mb-1">TERMS & CONDITIONS:</p>
+                        <ul className="text-[8px] list-decimal list-inside space-y-[2px] font-medium text-gray-800 leading-tight">
+                          <li>Payment within 30 days By Draft / Cheque Payable at Delhi. Overdue Interest 24% P. A. will be charged.</li>
+                          <li>Our responsibility ceases, as soon as goods are delivered to the transporter.</li>
+                          <li>Goods once sold can not be taken back.</li>
+                          <li>In case of any dispute Delhi Court will have Jurisdicition.</li>
                         </ul>
+                        <p className="text-[7px] font-bold mt-2">E.& O.E</p>
+                        <p className="text-[7px] font-medium italic mt-0.5">This is a Computer Generated Invoice</p>
                       </div>
 
                       <div className="w-[40%] p-1.5 flex flex-col justify-between items-end text-center">
-                        <p className="font-bold w-full text-right text-[9px]">For YOUR ENTERPRISE NAME</p>
-                        <div className="h-6"></div> 
+                        <p className="font-bold w-full text-right text-[10px] text-blue-900">For SLE MECHTRONICS LLP</p>
+                        <div className="h-10"></div> 
                         <div className="w-32 border-t border-black pt-0.5 mr-1">
                           <p className="text-[8px] font-bold uppercase tracking-wider">Authorized Signatory</p>
                         </div>
