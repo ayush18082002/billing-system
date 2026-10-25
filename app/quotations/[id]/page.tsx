@@ -1,5 +1,6 @@
 "use client";
 
+import InvoiceHeader from "@/components/InvoiceHeader";
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { useParams, useRouter } from "next/navigation";
@@ -227,12 +228,17 @@ export default function QuotationPrintView() {
             <div key={pageIndex} className="a4-container flex flex-col mb-8 print:mb-0">
               
               {/* HEADER AREA */}
-              <div className="text-center mb-1 shrink-0">
-                <h1 className="text-[10px] font-bold uppercase tracking-wider text-black leading-none">
-                  TAX Invoice {pageIndex > 0 && <span className="text-[8px] font-medium italic text-gray-500">(Continued)</span>}
-                </h1>
-                <p className="text-[7px] text-black font-medium mt-0.5">See Section 31 CGST Act & Rule 1 of Invoice Rule</p>
-              </div>
+              {isFirstPage ? (
+                <div className="shrink-0 mb-2">
+                  <InvoiceHeader />
+                </div>
+              ) : (
+                <div className="text-center mb-1 shrink-0 mt-4">
+                  <h1 className="text-[12px] font-bold uppercase tracking-wider text-black leading-none">
+                    TAX Invoice <span className="text-[9px] font-medium italic text-gray-500">(Continued)</span>
+                  </h1>
+                </div>
+              )}
 
               {/* MASTER BORDER WRAPPER */}
               <div className="border-[2px] border-black flex-1 flex flex-col overflow-hidden">
@@ -242,25 +248,14 @@ export default function QuotationPrintView() {
                 {/* ========================================= */}
                 {isFirstPage && (
                   <>
-                    {/* COMPANY HEADER */}
-                    <div className="flex border-b-[2px] border-black shrink-0">
-                      <div className="w-3/5 p-1.5 border-r-[2px] border-black">
-                        <h2 className="text-[14px] font-extrabold uppercase leading-tight text-blue-900">SLE MECHTRONICS LLP</h2>
-                        <p className="text-[9px] leading-tight mt-1 font-medium">KH NO. 110/22, MUNDKA INDUSTRIAL AREA,</p>
-                        <p className="text-[9px] leading-tight">MUNDKA, NEW DELHI-110041</p>
-                        <p className="text-[9px] leading-tight mt-1">Mob: +91-9873947619, +91-9811258459</p>
-                        <p className="text-[9px] leading-tight">Email: sigmadelhi@yahoo.com</p>
-                      </div>
-                      <div className="w-2/5 p-1.5 flex flex-col justify-center bg-slate-50">
-                        <div className="grid grid-cols-[60px_1fr] gap-x-1 gap-y-1 text-[9px]">
-                          <span className="font-bold">GSTIN/UIN</span><span className="uppercase font-bold text-slate-800">: 07AFXFS1758M1ZZ</span>
-                          <span className="font-bold">PAN</span><span className="uppercase">: AFXFS1758M</span>
-                          <span className="font-bold">State Code</span><span className="uppercase">: {companyState.code}</span>
-                        </div>
-                      </div>
+                    {/* COMPANY GST INFO ROW */}
+                    <div className="flex border-b-[2px] border-black shrink-0 bg-slate-50 p-1.5 items-center justify-between px-4 text-[10px]">
+                       <div><span className="font-bold">GSTIN/UIN:</span> <span className="uppercase font-bold text-blue-900">07AFXFS1758M1ZZ</span></div>
+                       <div><span className="font-bold">PAN:</span> <span className="uppercase">AFXFS1758M</span></div>
+                       <div><span className="font-bold">State Code:</span> <span className="uppercase">{companyState.code}</span></div>
                     </div>
 
-                    {/* INVOICE DETAILS w/ PO, GR, Transport */}
+                    {/* INVOICE DETAILS w/ PO, GR, E-Way, and Transport */}
                     <div className="grid grid-cols-2 md:grid-cols-4 border-b-[2px] border-black divide-x-[2px] divide-black shrink-0">
                       <div className="p-1">
                         <p className="text-[8px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Invoice / Bill No.</p>
@@ -277,22 +272,28 @@ export default function QuotationPrintView() {
                           </div>
                         )}
                       </div>
-                      <div className="p-1">
+                      <div className="p-1 flex flex-col justify-center">
                         <p className="text-[8px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Date of Supply</p>
                         <p className="font-semibold text-[10px] leading-none">{quotation.date_of_supply ? new Date(quotation.date_of_supply).toLocaleDateString('en-IN') : 'N/A'}</p>
                       </div>
-                      <div className="p-1">
+                      <div className="p-1 flex flex-col justify-center">
                         <p className="text-[8px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Place of Supply</p>
                         <p className="font-semibold text-[10px] leading-none">{placeOfSupply}</p>
                       </div>
-                      <div className="p-1">
+                      <div className="p-1 flex flex-col justify-center">
                         <p className="text-[8px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Logistics Info</p>
-                        <div className="mt-1 text-[8px] leading-none">
-                            <span className="font-bold">Vehicle:</span> {quotation.vehicle_number || 'N/A'}
-                        </div>
                         <div className="mt-0.5 text-[8px] leading-none">
-                            <span className="font-bold">Mode:</span> {quotation.mode_of_transport || 'N/A'}
+                            <span className="font-bold">Mode:</span> <span className="uppercase">{quotation.mode_of_transport || 'N/A'}</span>
                         </div>
+                        <div className="mt-1 text-[8px] leading-none">
+                            <span className="font-bold">Vehicle:</span> <span className="uppercase">{quotation.vehicle_number || 'N/A'}</span>
+                        </div>
+                        {/* E-Way Bill conditionally rendered here */}
+                        {quotation.eway_bill_no && (
+                           <div className="mt-1.5 text-[9px] leading-none text-red-600 font-bold">
+                             E-Way: {quotation.eway_bill_no}
+                           </div>
+                        )}
                       </div>
                     </div>
 
