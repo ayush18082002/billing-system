@@ -74,21 +74,30 @@ export default function CreateBill() {
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
-    const prefix = `Bill-${year}-${month}-`;
+    
+    // The prefix for the new bill being generated today
+    const newPrefix = `Bill-${year}-${month}-`;
 
-    const { data } = await supabase
+    // Search for ALL bills starting with "Bill-" instead of just this month's bills
+    const { data, error } = await supabase
       .from('quotations')
       .select('bill_no')
-      .ilike('bill_no', `${prefix}%`) 
-      .order('bill_no', { ascending: false })
+      .ilike('bill_no', 'Bill-%') 
+      .order('bill_no', { ascending: false }) 
       .limit(1);
 
     if (data && data.length > 0 && data[0].bill_no) {
+      // 1. Grabs the highest bill ever made
+      // 2. Splits it by '-' and grabs the last digits
+      // 3. Parses it as an integer and adds 1
       const lastSequence = parseInt(data[0].bill_no.split('-').pop(), 10);
       const nextSequence = String(lastSequence + 1).padStart(3, '0');
-      setHeader(prev => ({ ...prev, qtNo: `${prefix}${nextSequence}` }));
+      
+      // 4. Stitches the continuous sequence onto the CURRENT month's prefix
+      setHeader(prev => ({ ...prev, qtNo: `${newPrefix}${nextSequence}` }));
     } else {
-      setHeader(prev => ({ ...prev, qtNo: `${prefix}001` }));
+      // Fallback if the database is completely empty
+      setHeader(prev => ({ ...prev, qtNo: `${newPrefix}001` }));
     }
   };
 
